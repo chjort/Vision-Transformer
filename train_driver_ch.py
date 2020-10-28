@@ -9,14 +9,11 @@ from chambers.layers.transformer import Encoder
 tf.keras.backend.set_image_data_format("channels_first")
 
 # %%
-# (train_images, train_labels), (test_images, test_labels) = datasets.cifar10.load_data()
 (train_images, train_labels), (test_images, test_labels) = datasets.mnist.load_data()
 n_train = train_images.shape[0]
 n_test = test_images.shape[0]
 
 # %%
-# train_images = tf.cast(train_images.reshape((-1, 3, 32, 32)), dtype=tf.float32)
-# test_images = tf.cast(test_images.reshape((-1, 3, 32, 32)), dtype=tf.float32)
 train_images = tf.cast(train_images.reshape((-1, 1, 28, 28)), dtype=tf.float32)
 test_images = tf.cast(test_images.reshape((-1, 1, 28, 28)), dtype=tf.float32)
 train_images, test_images = train_images / 255.0, test_images / 255.0
@@ -30,8 +27,6 @@ test_y = tf.data.Dataset.from_tensor_slices(test_labels)
 test_dataset = tf.data.Dataset.zip((test_x, test_y))
 
 # %%
-
-
 IMG_SHAPE = (1, 28, 28)
 NUM_CLASSES = 10
 PATCH_SIZE = 4
@@ -85,7 +80,7 @@ hist = model.fit(train_dataset.batch(BATCH_SIZE).repeat(),
                  validation_steps=n_test // BATCH_SIZE,
                  )
 
-#%%
+# %%
 
 x, y = next(iter(test_dataset.batch(BATCH_SIZE)))
 
