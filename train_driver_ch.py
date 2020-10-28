@@ -6,16 +6,14 @@ from tensorflow.keras import datasets
 from chambers.layers.embedding import ConcatEmbedding, LearnedEmbedding1D
 from chambers.layers.transformer import Encoder
 
-tf.keras.backend.set_image_data_format("channels_first")
-
 # %%
 (train_images, train_labels), (test_images, test_labels) = datasets.mnist.load_data()
 n_train = train_images.shape[0]
 n_test = test_images.shape[0]
 
 # %%
-train_images = tf.cast(train_images.reshape((-1, 1, 28, 28)), dtype=tf.float32)
-test_images = tf.cast(test_images.reshape((-1, 1, 28, 28)), dtype=tf.float32)
+train_images = tf.cast(train_images.reshape((-1, 28, 28, 1)), dtype=tf.float32)
+test_images = tf.cast(test_images.reshape((-1, 28, 28, 1)), dtype=tf.float32)
 train_images, test_images = train_images / 255.0, test_images / 255.0
 
 # %%
@@ -27,17 +25,17 @@ test_y = tf.data.Dataset.from_tensor_slices(test_labels)
 test_dataset = tf.data.Dataset.zip((test_x, test_y))
 
 # %%
-IMG_SHAPE = (1, 28, 28)
+IMG_SHAPE = (28, 28, 1)
 NUM_CLASSES = 10
 PATCH_SIZE = 4
 PATCH_DIM = 64
-N_PATCHES = (IMG_SHAPE[1] // PATCH_SIZE) * (IMG_SHAPE[2] // PATCH_SIZE)
+N_PATCHES = (IMG_SHAPE[0] // PATCH_SIZE) * (IMG_SHAPE[1] // PATCH_SIZE)
 N_ENCODER_LAYERS = 3
 NUM_HEADS = 4
 FF_DIM = 128
 
 inputs = tf.keras.layers.Input(IMG_SHAPE)
-x = Rearrange('b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1=PATCH_SIZE, p2=PATCH_SIZE)(inputs)
+x = Rearrange('b (h p1) (w p2) c -> b (h w) (p1 p2 c)', p1=PATCH_SIZE, p2=PATCH_SIZE)(inputs)
 n_patches = x.shape[1]
 
 x = tf.keras.layers.Dense(PATCH_DIM)(x)
