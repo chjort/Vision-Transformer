@@ -38,8 +38,6 @@ def Seq2SeqTransformer(input_vocab_size, output_vocab_size, embed_dim, num_heads
 def VisionTransformer(input_shape, n_classes, patch_size, patch_dim, n_encoder_layers, n_heads, ff_dim):
     inputs = tf.keras.layers.Input(input_shape)
     x = Rearrange('b (h p1) (w p2) c -> b (h w) (p1 p2 c)', p1=patch_size, p2=patch_size)(inputs)
-    n_patches = x.shape[1]
-
     x = tf.keras.layers.Dense(patch_dim)(x)
     x = ConcatEmbedding(1, patch_dim,
                         side="left",
@@ -54,7 +52,7 @@ def VisionTransformer(input_shape, n_classes, patch_size, patch_dim, n_encoder_l
                 ff_dim=ff_dim,
                 num_layers=n_encoder_layers,
                 dropout_rate=0.0)(x)
-    x = tf.keras.layers.Cropping1D((0, n_patches))(x)
+    x = tf.keras.layers.Cropping1D((0, x.shape[1] - 1))(x)
 
     x = tf.keras.Sequential([
         tf.keras.layers.Dense(ff_dim, activation=tfa.activations.gelu),
