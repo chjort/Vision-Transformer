@@ -61,3 +61,44 @@ def VisionTransformer(input_shape, n_classes, patch_size, patch_dim, n_encoder_l
 
     model = tf.keras.models.Model(inputs, x)
     return model
+
+
+def VisionTransformerOS(input_shape, patch_size, patch_dim, n_encoder_layers, n_heads, ff_dim):
+    inputs1 = tf.keras.layers.Input(input_shape, name="x1")
+    inputs2 = tf.keras.layers.Input(input_shape, name="x2")
+
+    x1 = Rearrange('b (h p1) (w p2) c -> b (h w) (p1 p2 c)', p1=patch_size, p2=patch_size)(inputs1)
+    x2 = Rearrange('b (h p1) (w p2) c -> b (h w) (p1 p2 c)', p1=patch_size, p2=patch_size)(inputs2)
+
+    x1 = tf.keras.layers.Dense(patch_dim)(x1)
+    x2 = tf.keras.layers.Dense(patch_dim)(x2)
+
+    x = ConcatEmbedding(1, patch_dim,
+                        side="left",
+                        axis=1,
+                        initializer=tf.keras.initializers.RandomNormal(),
+                        name="add_cls_token")(x1)
+    x = ConcatEmbedding(1, patch_dim,
+                         side="right",
+                         axis=1,
+                         initializer=tf.keras.initializers.RandomNormal(),
+                         name="add_sep_token")(x)
+    x = tf.keras.layers.Concatenate(axis=1)([x, x2])
+
+    x = LearnedEmbedding1D(x.shape[1], patch_dim,
+                           initializer=tf.keras.initializers.RandomNormal(),
+                           name="pos_embedding")(x)
+    x = Encoder(embed_dim=patch_dim,
+                num_heads=n_heads,
+                ff_dim=ff_dim,
+                num_layers=n_encoder_layers,
+                dropout_rate=0.0)(x)
+    x = tf.keras.layers.Cropping1D((0, x.shape[1] - 1))(x)
+
+    x = tf.keras.Sequential([
+        tf.keras.layers.Dense(ff_dim, activation=tfa.activations.gelu),
+        tf.keras.layers.Dense(ff_dim)],
+        name="mlp_head")(x)
+
+    model = tf.keras.models.Model([inputs1, inputs2], x)
+    return model
