@@ -53,6 +53,7 @@ def VisionTransformer(input_shape, n_classes, patch_size, patch_dim, n_encoder_l
                 num_layers=n_encoder_layers,
                 dropout_rate=0.0)(x)
     x = tf.keras.layers.Cropping1D((0, x.shape[1] - 1))(x)
+    x = tf.keras.layers.Reshape([-1])(x)
 
     x = tf.keras.Sequential([
         tf.keras.layers.Dense(ff_dim, activation=tfa.activations.gelu),
@@ -94,11 +95,15 @@ def VisionTransformerOS(input_shape, patch_size, patch_dim, n_encoder_layers, n_
                 num_layers=n_encoder_layers,
                 dropout_rate=0.0)(x)
     x = tf.keras.layers.Cropping1D((0, x.shape[1] - 1))(x)
+    x = tf.keras.layers.Reshape([-1])(x)
 
-    x = tf.keras.Sequential([
-        tf.keras.layers.Dense(ff_dim, activation=tfa.activations.gelu),
-        tf.keras.layers.Dense(ff_dim)],
-        name="mlp_head")(x)
+    x = tf.keras.layers.Dense(ff_dim, activation=tfa.activations.gelu)(x)
+    x = tf.keras.layers.Dense(1, activation="sigmoid")(x)
+
+    # x = tf.keras.Sequential([
+    #     tf.keras.layers.Dense(ff_dim, activation=tfa.activations.gelu),
+    #     tf.keras.layers.Dense(1)],
+    #     name="mlp_head")(x)
 
     model = tf.keras.models.Model([inputs1, inputs2], x)
     return model

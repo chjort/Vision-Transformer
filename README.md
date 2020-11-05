@@ -15,6 +15,8 @@ example usage can found in `cifar.ipynb`
 
 PyTorch version [here](https://github.com/lucidrains/vit-pytorch) 
 
+## Data
+`wget https://www.dropbox.com/s/4qvj74p4gu2jfos/omniglot.tar.gz?dl=0`
 
 ## Citations
 
