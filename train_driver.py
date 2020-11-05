@@ -30,23 +30,26 @@ N_ENCODER_LAYERS = 3
 NUM_HEADS = 4
 FF_DIM = 128
 
-model = VisionTransformer(input_shape=IMG_SHAPE,
-                          n_classes=NUM_CLASSES,
-                          patch_size=PATCH_SIZE,
-                          patch_dim=PATCH_DIM,
-                          n_encoder_layers=N_ENCODER_LAYERS,
-                          n_heads=NUM_HEADS,
-                          ff_dim=FF_DIM)
+strategy = tf.distribute.MirroredStrategy()
 
-model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
-              loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-              metrics="accuracy")
+with strategy.scope():
+    model = VisionTransformer(input_shape=IMG_SHAPE,
+                              n_classes=NUM_CLASSES,
+                              patch_size=PATCH_SIZE,
+                              patch_dim=PATCH_DIM,
+                              n_encoder_layers=N_ENCODER_LAYERS,
+                              n_heads=NUM_HEADS,
+                              ff_dim=FF_DIM)
+
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
+                  loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+                  metrics="accuracy")
 
 model.summary()
 
 # %%
-BATCH_SIZE = 64
-EPOCHS = 10
+BATCH_SIZE = 64 * strategy.num_replicas_in_sync
+EPOCHS = 100
 
 hist = model.fit(train_dataset.batch(BATCH_SIZE).repeat(),
                  epochs=EPOCHS,
@@ -56,9 +59,9 @@ hist = model.fit(train_dataset.batch(BATCH_SIZE).repeat(),
                  )
 
 # %%
-x, y = next(iter(test_dataset.batch(BATCH_SIZE)))
-
-yhat = model(x)
-yhat = tf.argmax(tf.nn.softmax(yhat, axis=-1), axis=-1)[:, 0]
-yhat
-y
+# x, y = next(iter(test_dataset.batch(BATCH_SIZE)))
+#
+# yhat = model(x)
+# yhat = tf.argmax(tf.nn.softmax(yhat, axis=-1), axis=-1)[:, 0]
+# yhat
+# y

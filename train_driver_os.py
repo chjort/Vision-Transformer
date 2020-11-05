@@ -1,4 +1,5 @@
 import glob
+import os
 
 import tensorflow as tf
 import tensorflow.keras.backend as K
@@ -71,6 +72,9 @@ test_labels = list(range(len(train_class_dirs), len(train_class_dirs) + len(test
 n_train = len(train_class_dirs)
 n_test = len(test_class_dirs)
 
+# strategy = tf.distribute.MirroredStrategy()
+strategy = tf.distribute.OneDeviceStrategy("/gpu:0")
+
 
 # %%
 def flatten_batch(x, y):
@@ -83,9 +87,9 @@ def flatten_batch(x, y):
 input_shape = (84, 84, 1)
 
 n = 2
-n_pairs = 8
+n_pairs = 16 * strategy.num_replicas_in_sync
 train_dataset = InterleaveOneshotDataset(train_class_dirs, train_labels, n, sample_random=True, shuffle=True,
-                                         reshuffle_iteration=True, repeats=-1)
+                                         reshuffle_iteration=False, repeats=-1)
 train_dataset.map_images(resize, input_shape[0], input_shape[1])
 train_dataset.map_images(lambda x: x[..., 0:1])
 train_dataset.map(lambda x1, x2, y: ((x1, x2), y))
@@ -93,7 +97,7 @@ train_dataset.batch(n_pairs)
 train_dataset.map(flatten_batch)
 
 test_dataset = InterleaveOneshotDataset(test_class_dirs, test_labels, n, sample_random=True, shuffle=True,
-                                        reshuffle_iteration=True, repeats=-1)
+                                        reshuffle_iteration=False, repeats=-1)
 test_dataset.map_images(resize, input_shape[0], input_shape[1])
 test_dataset.map_images(lambda x: x[..., 0:1])
 test_dataset.map(lambda x1, x2, y: ((x1, x2), y))
@@ -121,26 +125,25 @@ test_dataset = test_dataset.dataset
 # plt.show()
 
 # %%
-PATCH_SIZE = 7  # 12
-PATCH_DIM = 256  # 128
+PATCH_SIZE = 12
+# PATCH_SIZE = 7
+PATCH_DIM = 128
+# PATCH_DIM = 256
 N_ENCODER_LAYERS = 8
 NUM_HEADS = 8
 FF_DIM = 512
-LR = 0.0001  # 0.00006
 
-model = VisionTransformerOS(input_shape=input_shape,
-                            patch_size=PATCH_SIZE,
-                            patch_dim=PATCH_DIM,
-                            n_encoder_layers=N_ENCODER_LAYERS,
-                            n_heads=NUM_HEADS,
-                            ff_dim=FF_DIM)
+with strategy.scope():
+    model = VisionTransformerOS(input_shape=input_shape,
+                                patch_size=PATCH_SIZE,
+                                patch_dim=PATCH_DIM,
+                                n_encoder_layers=N_ENCODER_LAYERS,
+                                n_heads=NUM_HEADS,
+                                ff_dim=FF_DIM)
+    # model = get_siamese_model(input_shape)
 
-# model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
-#               loss=tf.keras.losses.BinaryCrossentropy(from_logits=True),
-#               metrics="accuracy")
-
-# model = get_siamese_model(input_shape)
-
+# LR = 0.0001
+LR = 0.00006
 model.compile(optimizer=tf.keras.optimizers.Adam(lr=LR),
               loss="binary_crossentropy",
               metrics="accuracy")
@@ -149,14 +152,19 @@ model.summary()
 
 # %%
 EPOCHS = 100
-steps_per_epoch = 200
-validation_steps = 50
+steps_per_epoch = 200 // strategy.num_replicas_in_sync
+validation_steps = 50 // strategy.num_replicas_in_sync
 
+output_dir = "outputs/vitos1"
+os.makedirs(output_dir, exist_ok=True)
 hist = model.fit(train_dataset,
                  epochs=EPOCHS,
                  steps_per_epoch=steps_per_epoch,
                  validation_data=test_dataset.take(validation_steps),
-                 # validation_steps=validation_steps,
+                 callbacks=[
+                     tf.keras.callbacks.CSVLogger(os.path.join(output_dir, "log.csv")),
+                     tf.keras.callbacks.ModelCheckpoint(os.path.join(output_dir, "checkpoints", "model.ckpt"))
+                 ]
                  )
 
 # %%
