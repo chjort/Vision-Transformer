@@ -5,9 +5,8 @@ import tensorflow as tf
 from einops import rearrange
 
 from .base_datasets import TensorSliceDataset
-from .loader_functions import match_img_files, read_and_decode, match_img_files_triplet
+from .loader_functions import match_img_files, read_and_decode
 from .mixins import ImageLabelMixin
-from ..augmentations import resize
 
 
 class _TransformSliceDataset(TensorSliceDataset):
@@ -95,32 +94,35 @@ class InterleaveDataset(_TransformSliceDataset, ABC):
         pass
 
 
-class InterleaveImageDataset(InterleaveDataset, ImageLabelMixin):
+class InterleaveClassesDataset(InterleaveDataset):
     """
         Constructs a tensorflow.data.Dataset which loads images by interleaving through input folders.
 
         The attribute 'self.dataset' is the tensorflow.data.Dataset producing outputs of (images, labels)
     """
 
-    def __init__(self, image_class_dirs: list, labels: list, class_cycle_length, images_per_class,
-                 sample_random=False, repeats=None, shuffle=False, reshuffle_iteration=True, buffer_size=None,
-                 seed=None):
+    def __init__(self, class_dirs: list, labels: list, class_cycle_length, n_per_class,
+                 sample_n_random=False, repeats=None, shuffle=False, reshuffle_iteration=True,
+                 buffer_size=None, seed=None):
         """
-        :param image_class_dirs: list of class directories containing image files
+        :param class_dirs: list of class directories
         :param labels: list of labels for each class
         :param class_cycle_length: number of classes per cycle
-        :param images_per_class: number of images per class in a cycle
-        :param sample_random: Boolean. If true, will uniformly sample the images per class at random
+        :param n_per_class: number of elements per class
+        :param sample_n_random: Boolean. If true, will uniformly sample the elements per class at random
+        :param repeats: Number of times to iterate over the class dirs.
+        :param shuffle: Shuffle the class dirs.
+        :param reshuffle_iteration: If True and shuffle is True, will reshuffle the class dirs each iteration.
+        :param buffer_size
         """
-        self.sample_random = sample_random
-        super().__init__((image_class_dirs, labels), cycle_length=class_cycle_length, block_length=images_per_class,
+        self.sample_n_random = sample_n_random
+        super().__init__((class_dirs, labels), cycle_length=class_cycle_length, block_length=n_per_class,
                          repeats=repeats, shuffle=shuffle, reshuffle_iteration=reshuffle_iteration,
                          buffer_size=buffer_size, seed=seed)
 
-        self.map_image(read_and_decode)
-
-    def get_dir_images(self, input_dir):
-        return match_img_files(input_dir)
+    @abstractmethod
+    def get_dir_files(self, input_dir):
+        pass
 
     def random_upsample(self, x, n):
         n_x = tf.shape(x)[0]
@@ -130,55 +132,72 @@ class InterleaveImageDataset(InterleaveDataset, ImageLabelMixin):
         x = tf.concat([x, extra_samples], axis=0)
         return x
 
-    @tf.function
-    def random_sample(self, x, n, replace=True):
-        n_x = tf.shape(x)[0]
-
-        if replace:
-            random_indices = tf.random.uniform(shape=[n], minval=0, maxval=n_x, dtype=tf.int32, seed=self.seed)
-            x = tf.gather(x, random_indices)
-        else:
-            tf.assert_less(n, n_x + 1,
-                           message="`n` must be less than or equal to length of x, when `replace` is False.")
-            uniform_dist = tf.random.uniform(shape=[n_x], minval=0, maxval=1, seed=self.seed)
-            _, random_indices = tf.math.top_k(uniform_dist, k=n)
-            x = tf.gather(x, random_indices)
-
-        return x
-
     def block_iter(self, files, label):
         n_files = tf.shape(files)[0]
 
         if n_files < self.block_length:
             files = self.random_upsample(files, self.block_length)
 
-        if self.sample_random:
-            files = self.random_sample(files, self.block_length, replace=False)
+        if self.sample_n_random:
+            files = tf.random.shuffle(files, seed=self.seed)
 
         n_files = tf.shape(files)[0]
         labels = tf.tile([label], [n_files])
-        return tf.data.Dataset.from_tensor_slices((files, labels))
+
+        block = tf.data.Dataset.from_tensor_slices((files, labels))
+        block = block.take(self.block_length)  # TODO: Block will
+        return block
 
     @tf.function
     def interleave_fn(self, input_dir, label):
-        class_images = self.get_dir_images(input_dir)
-        return self.block_iter(class_images, label)
+        class_files = self.get_dir_files(input_dir)
+        return self.block_iter(class_files, label)
 
 
-class InterleaveOneshotDataset(InterleaveImageDataset):
-    def __init__(self, image_class_dirs: list, labels: list, n: int, sample_random=False, repeats=None,
+class InterleaveImagesDataset(InterleaveClassesDataset, ImageLabelMixin):
+    """
+        Constructs a tensorflow.data.Dataset which loads images by interleaving through input folders.
+
+        The attribute 'self.dataset' is the tensorflow.data.Dataset producing outputs of (images, labels)
+    """
+
+    def __init__(self, class_dirs: list, labels: list, class_cycle_length, n_per_class,
+                 sample_n_random=False, repeats=None, shuffle=False, reshuffle_iteration=True,
+                 buffer_size=None, seed=None):
+        """
+        :param class_dirs: list of class directories
+        :param labels: list of labels for each class
+        :param class_cycle_length: number of classes per cycle
+        :param n_per_class: number of elements per class
+        :param sample_n_random: Boolean. If true, will uniformly sample the elements per class at random
+        :param repeats: Number of times to iterate over the class dirs.
+        :param shuffle: Shuffle the class dirs.
+        :param reshuffle_iteration: If True and shuffle is True, will reshuffle the class dirs each iteration.
+        :param buffer_size
+        """
+        super().__init__(class_dirs=class_dirs, labels=labels, class_cycle_length=class_cycle_length,
+                         n_per_class=n_per_class, sample_n_random=sample_n_random, repeats=repeats, shuffle=shuffle,
+                         reshuffle_iteration=reshuffle_iteration, buffer_size=buffer_size, seed=seed)
+        self.map_image(read_and_decode)
+
+    def get_dir_files(self, input_dir):
+        return match_img_files(input_dir)
+
+
+class InterleaveOneshotDataset(InterleaveImagesDataset):
+    def __init__(self, class_dirs: list, labels: list, n: int, sample_n_random=True, repeats=None,
                  shuffle=False, reshuffle_iteration=True, buffer_size=None, seed=None):
         """
-        :param image_class_dirs: list of class directories containing image files
+        :param class_dirs: list of class directories containing image files
         :param labels: list of labels for each class
         :param sample_random: Boolean. If true, will uniformly sample the images per class at random
         """
-        assert ( n >= 2 and n % 2 == 0), "n must be an even number and at least 2."
-        super(InterleaveOneshotDataset, self).__init__(image_class_dirs=image_class_dirs,
+        assert (n >= 2 and n % 2 == 0), "n must be an even number and at least 2."
+        super(InterleaveOneshotDataset, self).__init__(class_dirs=class_dirs,
                                                        labels=labels,
                                                        class_cycle_length=2,
-                                                       images_per_class=n,
-                                                       sample_random=sample_random,
+                                                       n_per_class=n,
+                                                       sample_n_random=sample_n_random,
                                                        repeats=repeats,
                                                        shuffle=shuffle,
                                                        reshuffle_iteration=reshuffle_iteration,
@@ -207,212 +226,46 @@ class InterleaveOneshotDataset(InterleaveImageDataset):
         x1, x2 = tf.split(x, 2, axis=1)
         x1 = tf.squeeze(x1, 1)
         x2 = tf.squeeze(x2, 1)
-        return x1, x2, y
+        return (x1, x2), y
 
-
-class InterleaveTripletDataset(InterleaveImageDataset, ImageLabelMixin):
-    def triplet_block_iter(self, anch, pos, neg, label):
-        pos = tf.concat([anch, pos], axis=0)
-
-        n_pos = tf.shape(pos)[0]
-        n_neg = tf.shape(neg)[0]
-
-        n_pos_block = tf.cast(tf.math.floor(self.block_length / 2), tf.int32)
-        n_neg_block = tf.cast(tf.math.ceil(self.block_length / 2), tf.int32)
-
-        if n_pos < n_pos_block:
-            pos = self.random_upsample(pos, n_pos_block)
-            n_pos = tf.shape(pos)[0]
-        elif n_pos > n_pos_block:
-            pos = self.random_sample(pos, n_pos_block, replace=False)
-            n_pos = tf.shape(pos)[0]
-
-        if n_neg < n_neg_block:
-            neg = self.random_upsample(neg, n_neg_block)
-            n_neg = tf.shape(neg)[0]
-        elif n_neg > n_neg_block:
-            neg = self.random_sample(neg, n_neg_block, replace=False)
-            n_neg = tf.shape(neg)[0]
-
-        if self.sample_random:
-            pos = tf.random.shuffle(pos, seed=self.seed)
-            neg = tf.random.shuffle(neg, seed=self.seed)
-
-        triplet_images = tf.concat([pos, neg], axis=0)
-
-        pos_labels = tf.tile([label], [n_pos])
-        neg_labels = tf.tile([-1], [n_neg])
-        labels = tf.concat([pos_labels, neg_labels], axis=0)
-
-        return tf.data.Dataset.from_tensor_slices((triplet_images, labels))
-
-    @tf.function
-    def interleave_fn(self, input_dir, label):
-        anch, pos, neg = match_img_files_triplet(input_dir)
-        return self.triplet_block_iter(anch, pos, neg, label)
-
-
-class InterleaveImageTripletDataset(InterleaveTripletDataset, ImageLabelMixin):
-    @tf.function
-    def interleave_fn(self, input_dir, label):
-        img_files = match_img_files(input_dir)
-
-        if tf.shape(img_files)[0] == 0:  # If no images found in folder, assume it is triplet folder
-            anch, pos, neg = match_img_files_triplet(input_dir)
-            return self.triplet_block_iter(anch, pos, neg, label)
-        else:
-            return self.block_iter(img_files, label)
-
-
-class InterleaveTFRecordDataset(InterleaveDataset, ImageLabelMixin):
-    """
-        Constructs a tensorflow.data.Dataset which loads examples from TF Record files by interleaving through
-        the input record files.
-    """
-
-    def __init__(self, records: list, record_cycle_length, samples_per_record,
-                 sample_random=False, repeats=None, shuffle=False, reshuffle_iteration=True, buffer_size=None, seed=None
-                 ):
-        """
-        :param records: list of TF Record files
-        :param record_cycle_length: number of records per cycle
-        :param samples_per_record: number of examples per record in a cycle
-        :param sample_random: Boolean. If true, will uniformly sample the examples per record at random
-        """
-        self.sample_random = sample_random
-        super().__init__(records, cycle_length=record_cycle_length, block_length=samples_per_record,
-                         repeats=repeats, shuffle=shuffle, reshuffle_iteration=reshuffle_iteration,
-                         buffer_size=buffer_size, seed=seed)
-
-    @tf.function
-    def interleave_fn(self, record):
-        td_rec = tf.data.TFRecordDataset(record)
-        if self.sample_random:
-            td_rec = td_rec.shuffle(buffer_size=100)
-            td_rec = td_rec.repeat()
-            td_rec = td_rec.take(self.block_length)
-        return td_rec
-
-
-class SequentialImageDataset(_TransformSliceDataset, ImageLabelMixin):
-    """
-        Constructs a tensorflow.data.Dataset which sequentially loads images from input folders.
-    """
-
-    def __init__(self, image_class_dirs: list, labels: list, repeats=None, shuffle=False, reshuffle_iteration=True,
-                 buffer_size=None, seed=None):
-        """
-        :param image_class_dirs: list of class directories containing image files
-        :param labels: list of labels for each class
-        :param class_cycle_length: number of classes per cycle
-        :param images_per_class_cycle: number of images per class in a cycle
-        :param sample_random: Boolean. If true, will uniformly sample the images per class at random
-        """
-        super().__init__((image_class_dirs, labels), repeats=repeats, shuffle=shuffle,
-                         reshuffle_iteration=reshuffle_iteration, buffer_size=buffer_size,
-                         seed=seed)
-
-        self.flat_map(self.flat_map_fn)
-        self.map_image(read_and_decode)
-
-    def make_iter(self, files, label):
-        n_files = tf.shape(files)[0]
-        y = tf.tile([label], [n_files])
-        return tf.data.Dataset.from_tensor_slices((files, y))
-
-    def flat_map_fn(self, input_dir, label):
-        files = match_img_files(input_dir)
-        return self.make_iter(files, label)
-
-
-class SequentialTripletDataset(SequentialImageDataset, ImageLabelMixin):
-    def triplet_make_iter(self, anch, pos, neg, label):
-        pos = tf.concat([anch, pos], axis=0)
-        n_pos = tf.shape(pos)[0]
-        n_neg = tf.shape(neg)[0]
-
-        triplet_images = tf.concat([pos, neg], axis=0)
-
-        pos_labels = tf.tile([label], [n_pos])
-        neg_labels = tf.tile([-1], [n_neg])
-        labels = tf.concat([pos_labels, neg_labels], axis=0)
-
-        return tf.data.Dataset.from_tensor_slices((triplet_images, labels))
-
-    def flat_map_fn(self, input_dir, label):
-        anch, pos, neg = match_img_files_triplet(input_dir)
-        return self.triplet_make_iter(anch, pos, neg, label)
-
-
-class SequentialImageTripletDataset(SequentialTripletDataset, ImageLabelMixin):
-    @tf.function
-    def flat_map_fn(self, input_dir, label):
-        img_files = match_img_files(input_dir)
-        if tf.shape(img_files)[0] == 0:  # If no images found in folder, assume it is triplet folder
-            anch, pos, neg = match_img_files_triplet(input_dir)
-            return self.triplet_make_iter(anch, pos, neg, label)
-        else:
-            return self.make_iter(img_files, label)
-
-
-class SequentialTFRecordDataset(_TransformSliceDataset, ImageLabelMixin):
-    """
-        Constructs a tensorflow.data.Dataset which sequentially loads examples from TF Record files.
-    """
-
-    def __init__(self, records: list, repeats=None, shuffle=False, reshuffle_iteration=True, buffer_size=None,
-                 seed=None):
-        """
-        :param image_class_dirs: list of class directories containing image files
-        :param labels: list of labels for each class
-        :param class_cycle_length: number of classes per cycle
-        :param images_per_class_cycle: number of images per class in a cycle
-        :param sample_random: Boolean. If true, will uniformly sample the images per class at random
-        """
-        super().__init__(records, repeats=repeats, shuffle=shuffle, reshuffle_iteration=reshuffle_iteration,
-                         buffer_size=buffer_size,
-                         seed=seed)
-
-        self.dataset = tf.data.TFRecordDataset(records)
-
-
-class EpisodeImageDataset(InterleaveImageDataset, ImageLabelMixin):
-    """
-        Constructs a tensorflow.data.Dataset which generates batches of 'n-shot, k-way episodes'. Each batch consists of a
-        dictionary containing a support set and a query set, and a one-hot encoded tensor as the labels
-    """
-
-    def __init__(self, image_class_dirs: list, labels: list, n, k, q, resize_shape=(224, 224)):
-        """
-        :param image_class_dirs:
-        :param labels:
-        :param n: Number of images per class in the support set
-        :param k: Number of classes in the support set
-        :param q: Number of images per class in the query set
-        :param resize_shape: Tuple of (height, width) to resize image to
-        """
-
-        super().__init__(image_class_dirs, labels, class_cycle_length=k, images_per_class=n + q,
-                         sample_random=True, shuffle=True)
-        self.n = n
-        self.k = k
-        self.q = q
-        self.map_image(resize, *resize_shape)
-        self.batch(self.n + self.q, drop_remainder=True)
-        self.batch(self.k, drop_remainder=True)
-        self.map(self._get_support_query_y)
-
-    @tf.function
-    def _get_support_query_y(self, images):
-        """
-        Returns a function that splits an interleave batch into a support set and a query set according
-        to 'n', 'k' and 'q'.
-        :return: Dictionary containing support set and query set and the one-hot encoded labels
-        """
-
-        S = images[:, :self.n, ...]
-        Q = images[:, -self.q:, ...]
-        Y = tf.tile(tf.reshape(tf.range(self.k), [-1, 1]), [1, self.q])
-        Y = tf.one_hot(Y, self.k)
-
-        return {"support": S, "query": Q}, Y
+# class InterleaveOneshotDataset(InterleaveDataset):
+#     def __init__(self, image_class_dirs: list, labels: list, n: int, repeats=None,
+#                  shuffle=False, reshuffle_iteration=True, buffer_size=None, seed=None):
+#         """
+#         :param image_class_dirs: list of class directories containing image files
+#         :param labels: list of labels for each class
+#         :param sample_random: Boolean. If true, will uniformly sample the images per class at random
+#         """
+#         assert (n >= 2 and n % 2 == 0), "n must be an even number and at least 2."
+#         super(InterleaveOneshotDataset, self).__init__(inputs=(image_class_dirs, labels),
+#                                                        cycle_length=2,
+#                                                        block_length=n,
+#                                                        repeats=repeats,
+#                                                        shuffle=shuffle,
+#                                                        reshuffle_iteration=reshuffle_iteration,
+#                                                        buffer_size=buffer_size,
+#                                                        seed=seed)
+#         self.n = n
+#         self.batch(self.cycle_length * self.block_length, drop_remainder=True)
+#         self.map(self.arrange_oneshot)
+#         self.map(self.split_to_x1_x2_y)
+#
+#     def map_images(self, func, *args, **kwargs):
+#         def fn(x1, x2, labels):
+#             return func(x1, *args, **kwargs), func(x2, *args, **kwargs), labels
+#
+#         self.map(fn)
+#
+#     def arrange_oneshot(self, x, y):
+#         pos = rearrange(x, "(n k) h w c -> n k h w c", k=self.cycle_length, n=self.block_length)
+#         neg = rearrange(x, "(k n) h w c -> n k h w c", k=self.cycle_length, n=self.block_length)
+#         x = tf.concat([pos, neg], axis=0)
+#         y = tf.concat([tf.ones(self.block_length), tf.zeros(self.block_length)], axis=0)
+#         y = tf.cast(y, tf.int32)
+#         return x, y
+#
+#     def split_to_x1_x2_y(self, x, y):
+#         x1, x2 = tf.split(x, 2, axis=1)
+#         x1 = tf.squeeze(x1, 1)
+#         x2 = tf.squeeze(x2, 1)
+#         return (x1, x2), y
