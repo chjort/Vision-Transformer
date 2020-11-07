@@ -53,8 +53,8 @@ train_dataset.prefetch(-1)
 
 test_dataset = InterleaveTFRecordOneshotDataset(records=test_records,
                                                 n=n,
-                                                sample_n_random=True,
-                                                shuffle=True,
+                                                sample_n_random=False,
+                                                shuffle=False,
                                                 reshuffle_iteration=False,
                                                 repeats=None,
                                                 seed=42)
@@ -81,7 +81,7 @@ with strategy.scope():
                                 n_encoder_layers=N_ENCODER_LAYERS,
                                 n_heads=NUM_HEADS,
                                 ff_dim=FF_DIM,
-
+                                dropout_rate=0.1
                                 )
 
     # lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(initial_learning_rate=1e-4,
@@ -106,7 +106,7 @@ model.summary()
 EPOCHS = 100
 steps_per_epoch = 200 // strategy.num_replicas_in_sync
 
-output_dir = "outputs/vitos_no_tricks_adamw_drop"
+output_dir = "outputs/vitos_no_tricks_adamw_drop01"
 os.makedirs(output_dir, exist_ok=True)
 hist = model.fit(train_dataset,
                  epochs=EPOCHS,
@@ -114,6 +114,7 @@ hist = model.fit(train_dataset,
                  validation_data=test_dataset,
                  callbacks=[
                      tf.keras.callbacks.CSVLogger(os.path.join(output_dir, "log.csv")),
-                     tf.keras.callbacks.TensorBoard(os.path.join(output_dir, "tb_logs"))
+                     tf.keras.callbacks.TensorBoard(os.path.join(output_dir, "tb_logs"),
+                                                    profile_batch=0)
                  ]
                  )
