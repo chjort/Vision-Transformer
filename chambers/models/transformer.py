@@ -80,10 +80,10 @@ def VisionTransformerOS(input_shape, patch_size, patch_dim, n_encoder_layers, n_
                         initializer=tf.keras.initializers.RandomNormal(),
                         name="add_cls_token")(x1)
     x = ConcatEmbedding(1, patch_dim,
-                         side="right",
-                         axis=1,
-                         initializer=tf.keras.initializers.RandomNormal(),
-                         name="add_sep_token")(x)
+                        side="right",
+                        axis=1,
+                        initializer=tf.keras.initializers.RandomNormal(),
+                        name="add_sep_token")(x)
     x = tf.keras.layers.Concatenate(axis=1)([x, x2])
 
     x = LearnedEmbedding1D(x.shape[1], patch_dim,
@@ -97,13 +97,9 @@ def VisionTransformerOS(input_shape, patch_size, patch_dim, n_encoder_layers, n_
     x = tf.keras.layers.Cropping1D((0, x.shape[1] - 1))(x)
     x = tf.keras.layers.Reshape([-1])(x)
 
+    # MLP
     x = tf.keras.layers.Dense(ff_dim, activation=tfa.activations.gelu)(x)
     x = tf.keras.layers.Dense(1, activation="sigmoid")(x)
-
-    # x = tf.keras.Sequential([
-    #     tf.keras.layers.Dense(ff_dim, activation=tfa.activations.gelu),
-    #     tf.keras.layers.Dense(1)],
-    #     name="mlp_head")(x)
 
     model = tf.keras.models.Model([inputs1, inputs2], x)
     return model

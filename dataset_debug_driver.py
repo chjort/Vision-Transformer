@@ -4,7 +4,7 @@ import tensorflow as tf
 from einops import rearrange
 
 from chambers.augmentations import resize
-from chambers.data.loader import InterleaveOneshotDataset, InterleaveImagesDataset, InterleaveImagesDatasetTensor, \
+from chambers.data.loader import InterleaveOneshotDataset, InterleaveImageDataset, InterleaveImagesDatasetTensor, \
     InterleaveOneshotDatasetTensor
 from chambers.data.utils import time_dataset
 
@@ -19,8 +19,6 @@ test_labels = list(range(len(train_class_dirs), len(train_class_dirs) + len(test
 
 n_train = len(train_class_dirs)
 n_test = len(test_class_dirs)
-
-strategy = tf.distribute.OneDeviceStrategy("/gpu:0")
 
 
 # %%
@@ -43,17 +41,17 @@ x
 # %%
 n_class = 4
 per_class = 6
-td = InterleaveImagesDataset(class_dirs=train_class_dirs,
-                             labels=train_labels,
-                             class_cycle_length=n_class,
-                             n_per_class=per_class,
-                             sample_n_random=True,
-                             repeats=-1,
-                             shuffle=True,
-                             reshuffle_iteration=False,
-                             buffer_size=None,
-                             seed=42
-                             )
+td = InterleaveImageDataset(class_dirs=train_class_dirs,
+                            labels=train_labels,
+                            class_cycle_length=n_class,
+                            n_per_class=per_class,
+                            sample_n_random=True,
+                            repeats=-1,
+                            shuffle=True,
+                            reshuffle_iteration=False,
+                            buffer_size=None,
+                            seed=42
+                            )
 td.batch(n_class, drop_remainder=True)
 time_dataset(td.dataset, 2)
 
