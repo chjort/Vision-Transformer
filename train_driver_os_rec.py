@@ -2,6 +2,7 @@ import glob
 import os
 
 import tensorflow as tf
+import tensorflow_addons as tfa
 from einops import rearrange
 
 from chambers.data.loader import InterleaveTFRecordOneshotDataset
@@ -13,8 +14,10 @@ test_path = "/home/crr/datasets/omniglot/test_records"
 train_records = glob.glob(os.path.join(train_path, "*.tfrecord"))
 test_records = glob.glob(os.path.join(test_path, "*.tfrecord"))
 
-# strategy = tf.distribute.MirroredStrategy()
-strategy = tf.distribute.OneDeviceStrategy("/gpu:0")
+strategy = tf.distribute.MirroredStrategy()
+
+
+# strategy = tf.distribute.OneDeviceStrategy("/gpu:0")
 
 
 def flatten_batch(x, y):
@@ -65,11 +68,8 @@ test_dataset = test_dataset.dataset
 
 # %%
 INPUT_SHAPE = (84, 84, 1)
-# PATCH_SIZE = 15
 PATCH_SIZE = 12
-# PATCH_SIZE = 7
 PATCH_DIM = 128
-# PATCH_DIM = 256
 N_ENCODER_LAYERS = 8
 NUM_HEADS = 8
 FF_DIM = 512
@@ -80,29 +80,40 @@ with strategy.scope():
                                 patch_dim=PATCH_DIM,
                                 n_encoder_layers=N_ENCODER_LAYERS,
                                 n_heads=NUM_HEADS,
-                                ff_dim=FF_DIM)
-    # model = get_siamese_model(input_shape)
+                                ff_dim=FF_DIM,
 
-# LR = 0.0001
-LR = 0.00006
-model.compile(optimizer=tf.keras.optimizers.Adam(lr=LR),
-              loss="binary_crossentropy",
-              metrics="accuracy")
+                                )
+
+    # lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(initial_learning_rate=1e-4,
+    #                                                              decay_steps=100,
+    #                                                              decay_rate=0.1,
+    #                                                              staircase=True)
+
+    LR = 0.00006
+    optimizer = tfa.optimizers.AdamW(lr=LR,
+                                     weight_decay=1e-4,
+                                     beta_1=0.9,
+                                     beta_2=0.999,  # 0.98
+                                     epsilon=1e-8,
+                                     amsgrad=False)
+    model.compile(optimizer=optimizer,
+                  loss="binary_crossentropy",
+                  metrics="accuracy")
 
 model.summary()
 
 # %%
 EPOCHS = 100
 steps_per_epoch = 200 // strategy.num_replicas_in_sync
-# validation_steps = 50 // strategy.num_replicas_in_sync
 
-output_dir = "outputs/vitos1"
+output_dir = "outputs/vitos_no_tricks_adamw_drop"
 os.makedirs(output_dir, exist_ok=True)
 hist = model.fit(train_dataset,
                  epochs=EPOCHS,
                  steps_per_epoch=steps_per_epoch,
-                 validation_data=test_dataset,  # .take(validation_steps),
+                 validation_data=test_dataset,
                  callbacks=[
                      tf.keras.callbacks.CSVLogger(os.path.join(output_dir, "log.csv")),
+                     tf.keras.callbacks.TensorBoard(os.path.join(output_dir, "tb_logs"))
                  ]
                  )

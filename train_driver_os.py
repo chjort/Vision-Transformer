@@ -146,11 +146,11 @@ with strategy.scope():
                                 ff_dim=FF_DIM)
     # model = get_siamese_model(input_shape)
 
-# LR = 0.0001
-LR = 0.00006
-model.compile(optimizer=tf.keras.optimizers.Adam(lr=LR),
-              loss="binary_crossentropy",
-              metrics="accuracy")
+    # LR = 0.0001
+    LR = 0.00006
+    model.compile(optimizer=tf.keras.optimizers.Adam(lr=LR),
+                  loss="binary_crossentropy",
+                  metrics="accuracy")
 
 model.summary()
 

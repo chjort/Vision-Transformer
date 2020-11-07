@@ -64,7 +64,7 @@ def VisionTransformer(input_shape, n_classes, patch_size, patch_dim, n_encoder_l
     return model
 
 
-def VisionTransformerOS(input_shape, patch_size, patch_dim, n_encoder_layers, n_heads, ff_dim):
+def VisionTransformerOS(input_shape, patch_size, patch_dim, n_encoder_layers, n_heads, ff_dim, dropout_rate=0.0):
     inputs1 = tf.keras.layers.Input(input_shape, name="x1")
     inputs2 = tf.keras.layers.Input(input_shape, name="x2")
 
@@ -74,12 +74,14 @@ def VisionTransformerOS(input_shape, patch_size, patch_dim, n_encoder_layers, n_
     x1 = tf.keras.layers.Dense(patch_dim)(x1)
     x2 = tf.keras.layers.Dense(patch_dim)(x2)
 
-    x = ConcatEmbedding(1, patch_dim,
+    x = ConcatEmbedding(n_embeddings=1,
+                        embedding_dim=patch_dim,
                         side="left",
                         axis=1,
                         initializer=tf.keras.initializers.RandomNormal(),
                         name="add_cls_token")(x1)
-    x = ConcatEmbedding(1, patch_dim,
+    x = ConcatEmbedding(n_embeddings=1,
+                        embedding_dim=patch_dim,
                         side="right",
                         axis=1,
                         initializer=tf.keras.initializers.RandomNormal(),
@@ -93,7 +95,7 @@ def VisionTransformerOS(input_shape, patch_size, patch_dim, n_encoder_layers, n_
                 num_heads=n_heads,
                 ff_dim=ff_dim,
                 num_layers=n_encoder_layers,
-                dropout_rate=0.0)(x)
+                dropout_rate=dropout_rate)(x)
     x = tf.keras.layers.Cropping1D((0, x.shape[1] - 1))(x)
     x = tf.keras.layers.Reshape([-1])(x)
 
