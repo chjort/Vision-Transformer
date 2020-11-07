@@ -216,7 +216,7 @@ class InterleaveTFRecordDataset(InterleaveDataset, ImageLabelMixin):
     def interleave_fn(self, record):
         td_rec = tf.data.TFRecordDataset(record)
         if self.sample_n_random:
-            td_rec = td_rec.shuffle(buffer_size=100)
+            td_rec = td_rec.shuffle(buffer_size=100, seed=self.seed)
             # td_rec = td_rec.repeat()
             # td_rec = td_rec.take(self.block_length)
         return td_rec

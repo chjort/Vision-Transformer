@@ -2,61 +2,10 @@ import glob
 import os
 
 import tensorflow as tf
-import tensorflow.keras.backend as K
 from einops import rearrange
-from tensorflow.keras.layers import Conv2D, Input, MaxPooling2D, Flatten, Dense, Lambda
-from tensorflow.keras.models import Sequential, Model
-from tensorflow.keras.regularizers import l2
 
 from chambers.data.loader import InterleaveTFRecordOneshotDataset
 from chambers.models.transformer import VisionTransformerOS
-
-
-def get_siamese_model(input_shape):
-    """
-        Model architecture
-    """
-
-    # Define the tensors for the two input images
-    left_input = Input(input_shape)
-    right_input = Input(input_shape)
-
-    # Convolutional Neural Network
-    model = Sequential()
-    model.add(Conv2D(64, (10, 10), activation='relu', input_shape=input_shape,
-                     kernel_initializer="normal", kernel_regularizer=l2(2e-4)))
-    model.add(MaxPooling2D())
-    model.add(Conv2D(128, (7, 7), activation='relu',
-                     kernel_initializer="normal",
-                     bias_initializer="normal", kernel_regularizer=l2(2e-4)))
-    model.add(MaxPooling2D())
-    model.add(Conv2D(128, (4, 4), activation='relu', kernel_initializer="normal",
-                     bias_initializer="normal", kernel_regularizer=l2(2e-4)))
-    model.add(MaxPooling2D())
-    model.add(Conv2D(256, (4, 4), activation='relu', kernel_initializer="normal",
-                     bias_initializer="normal", kernel_regularizer=l2(2e-4)))
-    model.add(Flatten())
-    model.add(Dense(4096, activation='sigmoid',
-                    kernel_regularizer=l2(1e-3),
-                    kernel_initializer="normal", bias_initializer="normal"))
-
-    # Generate the encodings (feature vectors) for the two images
-    encoded_l = model(left_input)
-    encoded_r = model(right_input)
-
-    # Add a customized layer to compute the absolute difference between the encodings
-    L1_layer = Lambda(lambda tensors: K.abs(tensors[0] - tensors[1]))
-    L1_distance = L1_layer([encoded_l, encoded_r])
-
-    # Add a dense layer with a sigmoid unit to generate the similarity score
-    prediction = Dense(1, activation='sigmoid', bias_initializer="normal")(L1_distance)
-
-    # Connect the inputs with the outputs
-    siamese_net = Model(inputs=[left_input, right_input], outputs=prediction)
-
-    # return the model
-    return siamese_net
-
 
 train_path = "/home/crr/datasets/omniglot/train_records"
 test_path = "/home/crr/datasets/omniglot/test_records"
@@ -68,7 +17,6 @@ test_records = glob.glob(os.path.join(test_path, "*.tfrecord"))
 strategy = tf.distribute.OneDeviceStrategy("/gpu:0")
 
 
-# %%
 def flatten_batch(x, y):
     x1 = rearrange(x[0], "b n h w c -> (b n) h w c")
     x2 = rearrange(x[1], "b n h w c -> (b n) h w c")
@@ -86,8 +34,8 @@ def preprocess(x, y):
     return (x1, x2), y
 
 
-n = 2
-n_pairs = 64 * strategy.num_replicas_in_sync
+n = 2  # increasing this value causes overfitting
+n_pairs = 128 * strategy.num_replicas_in_sync  # scale batch size with this.
 train_dataset = InterleaveTFRecordOneshotDataset(records=train_records,
                                                  n=n,
                                                  sample_n_random=True,
@@ -104,8 +52,8 @@ test_dataset = InterleaveTFRecordOneshotDataset(records=test_records,
                                                 n=n,
                                                 sample_n_random=True,
                                                 shuffle=True,
-                                                reshuffle_iteration=True,
-                                                repeats=-1,
+                                                reshuffle_iteration=False,
+                                                repeats=None,
                                                 seed=42)
 test_dataset.map(preprocess)
 test_dataset.batch(n_pairs)
@@ -116,6 +64,7 @@ train_dataset = train_dataset.dataset
 test_dataset = test_dataset.dataset
 
 # %%
+INPUT_SHAPE = (84, 84, 1)
 # PATCH_SIZE = 15
 PATCH_SIZE = 12
 # PATCH_SIZE = 7
@@ -145,23 +94,15 @@ model.summary()
 # %%
 EPOCHS = 100
 steps_per_epoch = 200 // strategy.num_replicas_in_sync
-validation_steps = 50 // strategy.num_replicas_in_sync
+# validation_steps = 50 // strategy.num_replicas_in_sync
 
 output_dir = "outputs/vitos1"
 os.makedirs(output_dir, exist_ok=True)
 hist = model.fit(train_dataset,
                  epochs=EPOCHS,
                  steps_per_epoch=steps_per_epoch,
-                 validation_data=test_dataset.take(validation_steps),
+                 validation_data=test_dataset,  # .take(validation_steps),
                  callbacks=[
                      tf.keras.callbacks.CSVLogger(os.path.join(output_dir, "log.csv")),
                  ]
                  )
-
-"""
-200/200 [==============================] - 20s 102ms/step - loss: 0.6929 - accuracy: 0.5091 - val_loss: 0.6910 - val_accuracy: 0.5206
-Epoch 2/100
-200/200 [==============================] - 19s 93ms/step - loss: 0.6916 - accuracy: 0.5213 - val_loss: 0.6945 - val_accuracy: 0.5303
-Epoch 3/100
-200/200 [==============================] - 19s 93ms/step - loss: 0.6915 - accuracy: 0.5236 - val_loss: 0.6905 - val_accuracy: 0.5200
-"""
