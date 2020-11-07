@@ -9,9 +9,9 @@ from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.regularizers import l2
 
 from chambers.augmentations import resize
-from chambers.data.loader import InterleaveOneshotDataset, InterleaveImagesDataset
+from chambers.data.loader import InterleaveOneshotDataset
 from chambers.models.transformer import VisionTransformerOS
-from chambers.data.utils import time_dataset
+
 
 def get_siamese_model(input_shape):
     """
@@ -75,44 +75,6 @@ n_test = len(test_class_dirs)
 strategy = tf.distribute.OneDeviceStrategy("/gpu:0")
 
 # %%
-# n_class = 5
-# per_class = 10
-# td = InterleaveImagesDataset(class_dirs=train_class_dirs,
-#                              labels=train_labels,
-#                              class_cycle_length=n_class,
-#                              n_per_class=per_class,
-#                              sample_n_random=True,
-#                              shuffle=False,
-#                              reshuffle_iteration=False,
-#                              buffer_size=None,
-#                              seed=42
-#                              )
-# td.batch(n_class * per_class)
-#
-# time_dataset(td.dataset, 2)
-
-
-# %%
-# x, y = next(it)
-#
-# fig, axes = plt.subplots(len(x), 1)
-# for i in range(len(x)):
-#     axes[i].imshow(x[i], cmap="gray")
-#     axes[i].set_ylabel(str(y[i].numpy()), rotation=0)
-#     axes[i].set_xticks([])
-#     axes[i].set_yticks([])
-# plt.tight_layout()
-# plt.show()
-
-
-# n = 2
-# n_pairs = 16 * strategy.num_replicas_in_sync
-# train_dataset = InterleaveOneshotDataset(train_class_dirs, train_labels, n, shuffle=True,
-#                                          reshuffle_iteration=True, repeats=-1, seed=42)
-#
-# train_dataset.dataset
-
-# %%
 # INPUT_SHAPE = (105, 105, 1)
 INPUT_SHAPE = (84, 84, 1)
 
@@ -138,26 +100,24 @@ def preprocess(x, y):
 
 
 n = 2
-n_pairs = 16 * strategy.num_replicas_in_sync
+n_pairs = 64 * strategy.num_replicas_in_sync
 train_dataset = InterleaveOneshotDataset(class_dirs=train_class_dirs,
                                          labels=train_labels,
                                          n=n,
                                          sample_n_random=True,
-                                         # sample_n_random=False,
                                          shuffle=True,
-                                         reshuffle_iteration=False,
+                                         reshuffle_iteration=True,
                                          repeats=-1,
                                          seed=42)
-
 train_dataset.map(preprocess)
 train_dataset.batch(n_pairs)
 train_dataset.map(flatten_batch)
+train_dataset.prefetch(-1)
 
 test_dataset = InterleaveOneshotDataset(class_dirs=test_class_dirs,
                                         labels=test_labels,
                                         n=n,
                                         sample_n_random=True,
-                                        # sample_n_random=False,
                                         shuffle=True,
                                         reshuffle_iteration=False,
                                         repeats=-1,
@@ -165,35 +125,10 @@ test_dataset = InterleaveOneshotDataset(class_dirs=test_class_dirs,
 test_dataset.map(preprocess)
 test_dataset.batch(n_pairs)
 test_dataset.map(flatten_batch)
+test_dataset.prefetch(-1)
 
 train_dataset = train_dataset.dataset
 test_dataset = test_dataset.dataset
-
-# %%
-# import matplotlib.pyplot as plt
-#
-# it = iter(train_dataset)
-# (x1, x2), y = next(it)
-# print(x1.shape, x2.shape, y.shape)
-#
-# batch_size = n * 2 * n_pairs
-#
-# nplot = 8
-# br = iter(range(0, batch_size, nplot))
-
-# %%
-# start = next(br)
-# fig, axes = plt.subplots(nplot, 2)
-# for i, idx in enumerate(range(start, start+nplot)):
-#     axes[i][0].imshow(x1[idx], cmap="gray")
-#     axes[i][0].set_ylabel(str(y[i].numpy()), rotation=0)
-#     axes[i][1].imshow(x2[idx], cmap="gray")
-#     axes[i][0].set_xticks([])
-#     axes[i][1].set_xticks([])
-#     axes[i][0].set_yticks([])
-#     axes[i][1].set_yticks([])
-# plt.tight_layout()
-# plt.show()
 
 # %%
 # PATCH_SIZE = 15
@@ -237,3 +172,11 @@ hist = model.fit(train_dataset,
                      tf.keras.callbacks.CSVLogger(os.path.join(output_dir, "log.csv")),
                  ]
                  )
+
+"""
+200/200 [==============================] - 20s 102ms/step - loss: 0.6929 - accuracy: 0.5091 - val_loss: 0.6910 - val_accuracy: 0.5206
+Epoch 2/100
+200/200 [==============================] - 19s 93ms/step - loss: 0.6916 - accuracy: 0.5213 - val_loss: 0.6945 - val_accuracy: 0.5303
+Epoch 3/100
+200/200 [==============================] - 19s 93ms/step - loss: 0.6915 - accuracy: 0.5236 - val_loss: 0.6905 - val_accuracy: 0.5200
+"""
