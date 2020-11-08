@@ -1,17 +1,14 @@
 """TODOS:
-* Set seed and test its effect
+* Set seed and test its effect                                                      (N)
+* Lower patch size of images.                                                       (Y - lower the better)
 * Use learning rate scheduler with 10% linear warmup steps.
-* Increase batch size to be very big 30k-100k
-* Try LAMB optimizer
-* Increase epochs until clear overfitting
+* Increase epochs until clear overfitting                                           (Y)
 * Use exponential decay learning rate scheduler with 10% linear warmup steps.
 * Regularize if still overfitting
 * Increase model size until not overfitting (double descent theory)
+* Evaluate model on 1-shot K-way tasks
+* Evaluate model on MAP, R@1, P@1 and AUC
 """
-
-from chambers.utils import set_random_seed
-
-set_random_seed(42)
 
 import glob
 import os
@@ -54,7 +51,7 @@ train_records = glob.glob(os.path.join(TRAIN_PATH, "*.tfrecord"))
 test_records = glob.glob(os.path.join(TEST_PATH, "*.tfrecord"))
 
 N_PER_PAIR = 2  # increasing this value causes overfitting
-N_PAIRS_PER_DEVICE = 256
+N_PAIRS_PER_DEVICE = 4
 N_PAIRS = N_PAIRS_PER_DEVICE * strategy.num_replicas_in_sync  # scale batch size with this.
 train_dataset = InterleaveTFRecordOneshotDataset(records=train_records,
                                                  n=N_PER_PAIR,
@@ -89,7 +86,7 @@ STEPS_PER_EPOCH = 200 // strategy.num_replicas_in_sync
 LR = 0.00006
 
 INPUT_SHAPE = (84, 84, 1)
-PATCH_SIZE = 12
+PATCH_SIZE = 4
 PATCH_DIM = 128
 N_ENCODER_LAYERS = 8
 NUM_HEADS = 8
@@ -117,17 +114,17 @@ with strategy.scope():
                                      epsilon=1e-8,
                                      amsgrad=False)
     model.compile(optimizer=optimizer,
-                  loss="binary_crossentropy",
-                  metrics="accuracy")
+                  loss=tf.keras.losses.BinaryCrossentropy(),
+                  metrics=[tf.keras.metrics.BinaryAccuracy(name="accuracy"), tf.keras.metrics.AUC()])
 
 model.summary()
 
-batch_size = 2 * N_PER_PAIR * N_PAIRS_PER_DEVICE
-batch_mem_gb = get_model_memory_usage(batch_size, model)
-print("Batch size of {} in memory: {}GB".format(batch_size, batch_mem_gb))
+# batch_size = 2 * N_PER_PAIR * N_PAIRS_PER_DEVICE
+# batch_mem_gb = get_model_memory_usage(batch_size, model)
+# print("Batch size of {} in memory: {}GB".format(batch_size, batch_mem_gb))
 
 # %%
-output_dir = "outputs/vitos_b2-98_drop01_b1024_e200_seed"
+output_dir = "outputs/vitos_b2-98_drop01_b16_e200_p4"
 os.makedirs(output_dir, exist_ok=True)
 hist = model.fit(train_dataset,
                  epochs=EPOCHS,
@@ -139,3 +136,6 @@ hist = model.fit(train_dataset,
                                                     profile_batch=0)
                  ]
                  )
+
+model.save(os.path.join(output_dir, "model.h5"))
+model.save(os.path.join(output_dir, "model"))
