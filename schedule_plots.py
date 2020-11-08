@@ -15,12 +15,12 @@ def read_file_logs(file):
 
 
 log_files = [
-    # "outputs/vitos_drop01/log.csv",
-    # "outputs/vitos_b2-98_drop01/log.csv",
-    # "outputs/vitos_b2-98_drop01_b1024/log.csv",
-    # "outputs/vitos_b2-98_drop01_b1024_sch/log.csv",
+    "outputs/vitos_drop01/log.csv",
+    "outputs/vitos_b2-98_drop01/log.csv",
+    "outputs/vitos_b2-98_drop01_b1024/log.csv",
+    "outputs/vitos_b2-98_drop01_b1024_sch/log.csv",
     "outputs/vitos_b2-98_drop01_b1024_e200/log.csv"
-    "outputs/vitos_b2-98_drop01_b1024_e200_seed/log.csv"
+    # "outputs/vitos_b2-98_drop01_b1024_e200_seed/log.csv"
 ]
 metrics = ["val_loss", "val_accuracy"]
 fig, axes = plt.subplots(len(metrics), 1)

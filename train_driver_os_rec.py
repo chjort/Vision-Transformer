@@ -1,3 +1,14 @@
+"""TODOS:
+* Set seed and test its effect
+* Use learning rate scheduler with 10% linear warmup steps.
+* Increase batch size to be very big 30k-100k
+* Try LAMB optimizer
+* Increase epochs until clear overfitting
+* Use exponential decay learning rate scheduler with 10% linear warmup steps.
+* Regularize if still overfitting
+* Increase model size until not overfitting (double descent theory)
+"""
+
 from chambers.utils import set_random_seed
 
 set_random_seed(42)
