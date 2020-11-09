@@ -42,6 +42,7 @@ plt.show()
 
 # %% PLOT SCHEDULES
 import tensorflow as tf
+import matplotlib.pyplot as plt
 
 EPOCHS = 100
 LR = 0.00006
@@ -56,7 +57,26 @@ schedules = [
                                                    decay_rate=0.1,
                                                    staircase=True,
                                                    name="exp_stair"),
-
+    tf.keras.optimizers.schedules.InverseTimeDecay(LR,
+                                                   decay_steps=66,
+                                                   decay_rate=0.1,
+                                                   staircase=False,
+                                                   name="inverse"),
+    tf.keras.optimizers.schedules.InverseTimeDecay(LR,
+                                                   decay_steps=66,
+                                                   decay_rate=0.1,
+                                                   staircase=True,
+                                                   name="inverse_stair"),
+    tf.keras.optimizers.schedules.PolynomialDecay(LR,
+                                                  decay_steps=66,
+                                                  end_learning_rate=0.000006,
+                                                  cycle=False,
+                                                  name="poly"),
+    tf.keras.optimizers.schedules.PolynomialDecay(LR,
+                                                  decay_steps=66,
+                                                  end_learning_rate=0.000006,
+                                                  cycle=True,
+                                                  name="poly_cycle"),
 ]
 for i in range(len(schedules)):
     sch = schedules[i]

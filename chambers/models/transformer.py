@@ -105,3 +105,8 @@ def VisionTransformerOS(input_shape, patch_size, patch_dim, n_encoder_layers, n_
 
     model = tf.keras.models.Model([inputs1, inputs2], x)
     return model
+
+
+tf.keras.utils.get_custom_objects().update({
+    "Rearrange": Rearrange,
+})

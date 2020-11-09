@@ -19,7 +19,6 @@ from einops import rearrange
 
 from chambers.data.loader import InterleaveTFRecordOneshotDataset
 from chambers.models.transformer import VisionTransformerOS
-from chambers.utils import get_model_memory_usage
 
 
 def flatten_batch(x, y):
@@ -39,8 +38,8 @@ def preprocess(x, y):
     return (x1, x2), y
 
 
-strategy = tf.distribute.MirroredStrategy()
-# strategy = tf.distribute.OneDeviceStrategy("/gpu:0")
+# strategy = tf.distribute.MirroredStrategy()
+strategy = tf.distribute.OneDeviceStrategy("/gpu:0")
 
 # data parameters
 TRAIN_PATH = "/home/crr/datasets/omniglot/train_records"
@@ -84,6 +83,8 @@ test_dataset = test_dataset.dataset
 EPOCHS = 200
 STEPS_PER_EPOCH = 200 // strategy.num_replicas_in_sync
 LR = 0.00006
+# WARMUP_STEPS = int(0.1 * EPOCHS)
+# EPOCHS = EPOCHS + WARMUP_STEPS
 
 INPUT_SHAPE = (84, 84, 1)
 PATCH_SIZE = 4
@@ -106,6 +107,7 @@ with strategy.scope():
     #                                                     decay_steps=int(0.66 * EPOCHS) * STEPS_PER_EPOCH,
     #                                                     decay_rate=0.1,
     #                                                     staircase=True)
+    # LR = LinearWarmup(LR, warmup_steps=WARMUP_STEPS)
 
     optimizer = tfa.optimizers.AdamW(learning_rate=LR,
                                      weight_decay=1e-4,
@@ -138,4 +140,5 @@ hist = model.fit(train_dataset,
                  )
 
 model.save(os.path.join(output_dir, "model.h5"))
+model.save_weights(os.path.join(output_dir, "model.weights"))
 model.save(os.path.join(output_dir, "model"))

@@ -204,3 +204,8 @@ class ConcatEmbedding(tf.keras.layers.Layer):
                   "axis": self.axis, "side": self.side, "initializer": self.initializer}
         base_config = super(ConcatEmbedding, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+
+tf.keras.utils.get_custom_objects().update({
+    "ConcatEmbedding": ConcatEmbedding
+})
