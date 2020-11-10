@@ -38,8 +38,8 @@ def preprocess(x, y):
     return (x1, x2), y
 
 
-# strategy = tf.distribute.MirroredStrategy()
-strategy = tf.distribute.OneDeviceStrategy("/gpu:0")
+strategy = tf.distribute.MirroredStrategy()
+# strategy = tf.distribute.OneDeviceStrategy("/gpu:0")
 
 # data parameters
 TRAIN_PATH = "/home/crr/datasets/omniglot/train_records"
@@ -50,7 +50,7 @@ train_records = glob.glob(os.path.join(TRAIN_PATH, "*.tfrecord"))
 test_records = glob.glob(os.path.join(TEST_PATH, "*.tfrecord"))
 
 N_PER_PAIR = 2  # increasing this value causes overfitting
-N_PAIRS_PER_DEVICE = 4
+N_PAIRS_PER_DEVICE = 64
 N_PAIRS = N_PAIRS_PER_DEVICE * strategy.num_replicas_in_sync  # scale batch size with this.
 train_dataset = InterleaveTFRecordOneshotDataset(records=train_records,
                                                  n=N_PER_PAIR,
@@ -87,7 +87,7 @@ LR = 0.00006
 # EPOCHS = EPOCHS + WARMUP_STEPS
 
 INPUT_SHAPE = (84, 84, 1)
-PATCH_SIZE = 4
+PATCH_SIZE = 7
 PATCH_DIM = 128
 N_ENCODER_LAYERS = 8
 NUM_HEADS = 8
@@ -126,7 +126,7 @@ model.summary()
 # print("Batch size of {} in memory: {}GB".format(batch_size, batch_mem_gb))
 
 # %%
-output_dir = "outputs/vitos_b2-98_drop01_b16_e200_p4"
+output_dir = "outputs/vitos_b2-98_drop01_b256_e200_p7_2"
 os.makedirs(output_dir, exist_ok=True)
 hist = model.fit(train_dataset,
                  epochs=EPOCHS,
@@ -135,10 +135,15 @@ hist = model.fit(train_dataset,
                  callbacks=[
                      tf.keras.callbacks.CSVLogger(os.path.join(output_dir, "log.csv")),
                      tf.keras.callbacks.TensorBoard(os.path.join(output_dir, "tb_logs"),
-                                                    profile_batch=0)
+                                                    profile_batch=0),
+                     tf.keras.callbacks.ModelCheckpoint(os.path.join(output_dir, "weights_{val_accuracy:.4f}.h5"),
+                                                        monitor="val_accuracy",
+                                                        save_best_only=True,
+                                                        save_weights_only=True)
                  ]
                  )
 
 model.save(os.path.join(output_dir, "model.h5"))
 model.save_weights(os.path.join(output_dir, "model.weights"))
+model.save_weights(os.path.join(output_dir, "model_weights.h5"))
 model.save(os.path.join(output_dir, "model"))

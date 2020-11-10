@@ -1,8 +1,8 @@
+# %% PLOT LOGS
 import matplotlib.pyplot as plt
 import numpy as np
 
 
-# %% PLOT LOGS
 def read_file_logs(file):
     with open(file) as f:
         col_names = f.readline().strip("\n").split(",")
@@ -16,11 +16,12 @@ log_files = [
     # "outputs/vitos_b2-98_drop01/log.csv",
     # "outputs/vitos_b2-98_drop01_b1024/log.csv",
     # "outputs/vitos_b2-98_drop01_b1024_sch/log.csv",
-    "outputs/vitos_b2-98_drop01_b1024_e200/log.csv",
-    "outputs/vitos_b2-98_drop01_b1024_e200_seed42/log.csv",
-    "outputs/vitos_b2-98_drop01_b1024_e200_seed41/log.csv",
-    "outputs/vitos_b2-98_drop01_b1024_e200_1/log.csv",
-    "outputs/vitos_b2-98_drop01_b256_e200_p7/log.csv"
+    # "outputs/vitos_b2-98_drop01_b1024_e200/log.csv",
+    # "outputs/vitos_b2-98_drop01_b1024_e200_seed42/log.csv",
+    # "outputs/vitos_b2-98_drop01_b1024_e200_seed41/log.csv",
+    # "outputs/vitos_b2-98_drop01_b1024_e200_1/log.csv",
+    "outputs/vitos_b2-98_drop01_b256_e200_p7/log.csv",
+    "outputs/vitos_b2-98_drop01_b256_e200_p7_1/log.csv"
 ]
 metrics = ["loss", "accuracy"]
 fig, axes = plt.subplots(len(metrics), 2)
