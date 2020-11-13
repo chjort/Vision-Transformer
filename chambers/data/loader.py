@@ -103,7 +103,7 @@ class InterleaveClassesDataset(InterleaveDataset):
         The attribute 'self.dataset' is the tensorflow.data.Dataset producing outputs of (images, labels)
     """
 
-    def __init__(self, class_dirs: list, labels: list, class_cycle_length, n_per_class,
+    def __init__(self, class_dirs: list, labels: list, class_cycle_length, n_per_class, block_bound=True,
                  sample_n_random=False, repeats=None, shuffle=False, reshuffle_iteration=True,
                  buffer_size=None, seed=None):
         """
@@ -118,6 +118,7 @@ class InterleaveClassesDataset(InterleaveDataset):
         :param buffer_size
         """
         self.sample_n_random = sample_n_random
+        self.block_bound = block_bound
         super().__init__((class_dirs, labels), cycle_length=class_cycle_length, block_length=n_per_class,
                          repeats=repeats, shuffle=shuffle, reshuffle_iteration=reshuffle_iteration,
                          buffer_size=buffer_size, seed=seed)
@@ -147,7 +148,9 @@ class InterleaveClassesDataset(InterleaveDataset):
         labels = tf.tile([label], [n_files])
 
         block = tf.data.Dataset.from_tensor_slices((files, labels))
-        # block = block.take(self.block_length)  # TODO: Does this make a difference?
+
+        if self.block_bound:
+            block = block.take(self.block_length)  # TODO: Does this make a difference?
         return block
 
     @tf.function
@@ -163,7 +166,7 @@ class InterleaveImageDataset(InterleaveClassesDataset, ImageLabelMixin):
         The attribute 'self.dataset' is the tensorflow.data.Dataset producing outputs of (images, labels)
     """
 
-    def __init__(self, class_dirs: list, labels: list, class_cycle_length, n_per_class,
+    def __init__(self, class_dirs: list, labels: list, class_cycle_length, n_per_class, block_bound=True,
                  sample_n_random=False, repeats=None, shuffle=False, reshuffle_iteration=True,
                  buffer_size=None, seed=None):
         """
@@ -179,8 +182,9 @@ class InterleaveImageDataset(InterleaveClassesDataset, ImageLabelMixin):
         :param seed: Seed to use for random shuffle and sampling.
         """
         super().__init__(class_dirs=class_dirs, labels=labels, class_cycle_length=class_cycle_length,
-                         n_per_class=n_per_class, sample_n_random=sample_n_random, repeats=repeats, shuffle=shuffle,
-                         reshuffle_iteration=reshuffle_iteration, buffer_size=buffer_size, seed=seed)
+                         n_per_class=n_per_class, block_bound=block_bound, sample_n_random=sample_n_random,
+                         repeats=repeats, shuffle=shuffle, reshuffle_iteration=reshuffle_iteration,
+                         buffer_size=buffer_size, seed=seed)
         self.map_image(read_and_decode)
 
     def get_dir_files(self, input_dir):
@@ -193,7 +197,7 @@ class InterleaveTFRecordDataset(InterleaveDataset, ImageLabelMixin):
         the input record files.
     """
 
-    def __init__(self, records: list, record_cycle_length, n_per_record,
+    def __init__(self, records: list, record_cycle_length, n_per_record, block_bound=True,
                  sample_n_random=False, repeats=None, shuffle=False, reshuffle_iteration=True,
                  buffer_size=None, seed=None):
         """
@@ -208,6 +212,7 @@ class InterleaveTFRecordDataset(InterleaveDataset, ImageLabelMixin):
         :param seed: Seed to use for random shuffle and sampling.
         """
         self.sample_n_random = sample_n_random
+        self.block_bound = block_bound
         super().__init__(records, cycle_length=record_cycle_length, block_length=n_per_record,
                          repeats=repeats, shuffle=shuffle, reshuffle_iteration=reshuffle_iteration,
                          buffer_size=buffer_size, seed=seed)
@@ -220,7 +225,8 @@ class InterleaveTFRecordDataset(InterleaveDataset, ImageLabelMixin):
                                     reshuffle_each_iteration=True,
                                     seed=self.seed)
             # td_rec = td_rec.repeat()
-            # td_rec = td_rec.take(self.block_length)
+            if self.block_bound:
+                td_rec = td_rec.take(self.block_length)
         return td_rec
 
 
@@ -234,6 +240,7 @@ class InterleaveOneshotDataset(InterleaveImageDataset):
                                                        labels=labels,
                                                        class_cycle_length=2,
                                                        n_per_class=n,
+                                                       block_bound=False,
                                                        sample_n_random=sample_n_random,
                                                        repeats=repeats,
                                                        shuffle=shuffle,
@@ -275,6 +282,7 @@ class InterleaveTFRecordOneshotDataset(InterleaveTFRecordDataset):
         super(InterleaveTFRecordOneshotDataset, self).__init__(records=records,
                                                                record_cycle_length=2,
                                                                n_per_record=n,
+                                                               block_bound=False,
                                                                sample_n_random=sample_n_random,
                                                                repeats=repeats,
                                                                shuffle=shuffle,
