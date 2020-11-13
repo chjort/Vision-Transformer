@@ -38,8 +38,8 @@ def preprocess(x, y):
     return (x1, x2), y
 
 
-strategy = tf.distribute.MirroredStrategy()
-# strategy = tf.distribute.OneDeviceStrategy("/gpu:0")
+# strategy = tf.distribute.MirroredStrategy()
+strategy = tf.distribute.OneDeviceStrategy("/gpu:0")
 
 # data parameters
 TRAIN_PATH = "/home/crr/datasets/omniglot/train_records"

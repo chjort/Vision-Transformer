@@ -35,7 +35,8 @@ def Seq2SeqTransformer(input_vocab_size, output_vocab_size, embed_dim, num_heads
     return model
 
 
-def VisionTransformer(input_shape, n_classes, patch_size, patch_dim, n_encoder_layers, n_heads, ff_dim):
+def VisionTransformer(input_shape, n_classes, patch_size, patch_dim, n_encoder_layers, n_heads, ff_dim,
+                      dropout_rate=0.0):
     inputs = tf.keras.layers.Input(input_shape)
     x = Rearrange('b (h p1) (w p2) c -> b (h w) (p1 p2 c)', p1=patch_size, p2=patch_size)(inputs)
     x = tf.keras.layers.Dense(patch_dim)(x)
@@ -51,7 +52,7 @@ def VisionTransformer(input_shape, n_classes, patch_size, patch_dim, n_encoder_l
                 num_heads=n_heads,
                 ff_dim=ff_dim,
                 num_layers=n_encoder_layers,
-                dropout_rate=0.0)(x)
+                dropout_rate=dropout_rate)(x)
     x = tf.keras.layers.Cropping1D((0, x.shape[1] - 1))(x)
     x = tf.keras.layers.Reshape([-1])(x)
 
@@ -104,6 +105,45 @@ def VisionTransformerOS(input_shape, patch_size, patch_dim, n_encoder_layers, n_
     x = tf.keras.layers.Dense(1, activation="sigmoid")(x)
 
     model = tf.keras.models.Model([inputs1, inputs2], x)
+    return model
+
+
+def VisionTransformerSeg(input_shape, n_classes, n_mask_classes, patch_size, patch_dim, n_encoder_layers, n_heads,
+                         ff_dim, dropout_rate=0.0):
+    inputs = tf.keras.layers.Input(input_shape)
+    x = Rearrange('b (h p1) (w p2) c -> b (h w) (p1 p2 c)', p1=patch_size, p2=patch_size)(inputs)
+    x = tf.keras.layers.Dense(patch_dim)(x)
+    x = ConcatEmbedding(1, patch_dim,
+                        side="left",
+                        axis=1,
+                        initializer=tf.keras.initializers.RandomNormal(),
+                        name="add_cls_token")(x)
+    x = LearnedEmbedding1D(x.shape[1], patch_dim,
+                           initializer=tf.keras.initializers.RandomNormal(),
+                           name="pos_embedding")(x)
+    x = Encoder(embed_dim=patch_dim,
+                num_heads=n_heads,
+                ff_dim=ff_dim,
+                num_layers=n_encoder_layers,
+                dropout_rate=dropout_rate)(x)
+
+    xc = tf.keras.Sequential([
+        tf.keras.layers.Cropping1D((0, x.shape[1] - 1)),
+        tf.keras.layers.Reshape([-1]),
+        tf.keras.layers.Dense(ff_dim, activation=tfa.activations.gelu),
+        tf.keras.layers.Dense(n_classes)
+    ], name="class_head")(x)
+
+    h = int(input_shape[0] / patch_size)
+    w = int(input_shape[1] / patch_size)
+    xm = tf.keras.Sequential([
+        tf.keras.layers.Cropping1D((1, 0)),
+        tf.keras.layers.Dense(ff_dim, activation=tfa.activations.gelu),
+        tf.keras.layers.Dense(patch_size * patch_size * input_shape[-1], activation=tfa.activations.gelu),
+        Rearrange('b (h w) (p1 p2 c) -> b (h p1) (w p2) c', p1=patch_size, p2=patch_size, h=h, w=w)
+    ], name="mask_head")(x)
+
+    model = tf.keras.models.Model(inputs, [xc, xm])
     return model
 
 
