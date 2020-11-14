@@ -1,7 +1,6 @@
 import tensorflow as tf
 import tensorflow_addons as tfa
 import tensorflow_datasets as tfds
-from einops import rearrange
 
 from chambers.models.transformer import VisionTransformerSeg
 
@@ -42,12 +41,19 @@ def preprocess(sample):
 
     y = tf.one_hot(y, NUM_CLASSES)
 
-    return x, m, y
+    return x, (y, m)
 
 
 train_td = dataset["train"]
 train_td = train_td.map(preprocess)
 train_td = train_td.batch(16)
+train_td = train_td.repeat(-1)
+train_td = train_td.prefetch(-1)
+
+test_td = dataset["test"]
+test_td = test_td.map(preprocess)
+test_td = test_td.batch(16)
+test_td = test_td.prefetch(-1)
 
 # %%
 # it = iter(train_td)
@@ -74,7 +80,7 @@ train_td = train_td.batch(16)
 # plt.show()
 
 # %%
-EPOCHS = 200
+EPOCHS = 30
 STEPS_PER_EPOCH = 200 // strategy.num_replicas_in_sync
 LR = 0.00006
 
@@ -87,7 +93,6 @@ FF_DIM = 512
 with strategy.scope():
     model = VisionTransformerSeg(input_shape=INPUT_SHAPE,
                                  n_classes=NUM_CLASSES,
-                                 n_mask_classes=len(MASK_LABELS),
                                  patch_size=PATCH_SIZE,
                                  patch_dim=PATCH_DIM,
                                  n_encoder_layers=N_ENCODER_LAYERS,
@@ -102,23 +107,35 @@ with strategy.scope():
                                      beta_2=0.999,
                                      epsilon=1e-8,
                                      amsgrad=False)
-    # model.compile(optimizer=optimizer,
-    #               loss=tf.keras.losses.BinaryCrossentropy(),
-    #               metrics=[tf.keras.metrics.BinaryAccuracy(name="accuracy"), tf.keras.metrics.AUC()])
+    model.compile(optimizer=optimizer,
+                  loss=[tf.keras.losses.CategoricalCrossentropy(), tf.keras.losses.CategoricalCrossentropy()],
+                  metrics=[["acc"], ["acc"]])
 
 model.summary()
 
-#%%
-it = iter(train_td)
-x, m, y = next(it)
-x.shape, m.shape
-
-cls, mask = model(x)
-cls.shape, mask.shape
+# %%
+hist = model.fit(train_td,
+                 epochs=EPOCHS,
+                 steps_per_epoch=STEPS_PER_EPOCH,
+                 validation_data=test_td,
+                 verbose=2
+                 )
 
 # %%
-# hist = model.fit(train_dataset,
-#                  epochs=EPOCHS,
-#                  steps_per_epoch=STEPS_PER_EPOCH,
-#                  validation_data=test_dataset,
-#                  )
+# import matplotlib.pyplot as plt
+#
+# it = iter(test_td)
+# x, (m, y) = next(it)
+# x.shape, m.shape
+# cls, mask = model(x)
+#
+# # %%
+# i = 2
+# xp = x[i]
+# pred = onehot_to_rgb(mask[i], MASK_LABELS)
+#
+# plt.imshow(xp)
+# plt.show()
+#
+# plt.imshow(pred)
+# plt.show()

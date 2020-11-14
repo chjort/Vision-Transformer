@@ -108,7 +108,7 @@ def VisionTransformerOS(input_shape, patch_size, patch_dim, n_encoder_layers, n_
     return model
 
 
-def VisionTransformerSeg(input_shape, n_classes, n_mask_classes, patch_size, patch_dim, n_encoder_layers, n_heads,
+def VisionTransformerSeg(input_shape, n_classes, patch_size, patch_dim, n_encoder_layers, n_heads,
                          ff_dim, dropout_rate=0.0):
     inputs = tf.keras.layers.Input(input_shape)
     x = Rearrange('b (h p1) (w p2) c -> b (h w) (p1 p2 c)', p1=patch_size, p2=patch_size)(inputs)
@@ -131,8 +131,8 @@ def VisionTransformerSeg(input_shape, n_classes, n_mask_classes, patch_size, pat
         tf.keras.layers.Cropping1D((0, x.shape[1] - 1)),
         tf.keras.layers.Reshape([-1]),
         tf.keras.layers.Dense(ff_dim, activation=tfa.activations.gelu),
-        tf.keras.layers.Dense(n_classes)
-    ], name="class_head")(x)
+        tf.keras.layers.Dense(n_classes, activation="softmax")
+    ], name="class")(x)
 
     h = int(input_shape[0] / patch_size)
     w = int(input_shape[1] / patch_size)
@@ -140,8 +140,8 @@ def VisionTransformerSeg(input_shape, n_classes, n_mask_classes, patch_size, pat
         tf.keras.layers.Cropping1D((1, 0)),
         tf.keras.layers.Dense(ff_dim, activation=tfa.activations.gelu),
         tf.keras.layers.Dense(patch_size * patch_size * input_shape[-1], activation=tfa.activations.gelu),
-        Rearrange('b (h w) (p1 p2 c) -> b (h p1) (w p2) c', p1=patch_size, p2=patch_size, h=h, w=w)
-    ], name="mask_head")(x)
+        Rearrange('b (h w) (p1 p2 c) -> b (h p1) (w p2) c', p1=patch_size, p2=patch_size, h=h, w=w),
+    ], name="mask")(x)
 
     model = tf.keras.models.Model(inputs, [xc, xm])
     return model
