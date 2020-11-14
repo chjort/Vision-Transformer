@@ -18,7 +18,7 @@ import tensorflow_addons as tfa
 from einops import rearrange
 
 from chambers.data.loader import InterleaveTFRecordOneshotDataset
-from chambers.models.transformer import VisionTransformerOS
+from chambers.models.transformer import VisionTransformerOS, VisionTransformerOSv2
 
 
 def flatten_batch(x, y):
@@ -38,8 +38,8 @@ def preprocess(x, y):
     return (x1, x2), y
 
 
-# strategy = tf.distribute.MirroredStrategy()
-strategy = tf.distribute.OneDeviceStrategy("/gpu:0")
+strategy = tf.distribute.MirroredStrategy()
+# strategy = tf.distribute.OneDeviceStrategy("/gpu:0")
 
 # data parameters
 TRAIN_PATH = "/home/crr/datasets/omniglot/train_records"
@@ -94,14 +94,23 @@ NUM_HEADS = 8
 FF_DIM = 512
 
 with strategy.scope():
-    model = VisionTransformerOS(input_shape=INPUT_SHAPE,
-                                patch_size=PATCH_SIZE,
-                                patch_dim=PATCH_DIM,
-                                n_encoder_layers=N_ENCODER_LAYERS,
-                                n_heads=NUM_HEADS,
-                                ff_dim=FF_DIM,
-                                dropout_rate=0.1
-                                )
+    # model = VisionTransformerOS(input_shape=INPUT_SHAPE,
+    #                             patch_size=PATCH_SIZE,
+    #                             patch_dim=PATCH_DIM,
+    #                             n_encoder_layers=N_ENCODER_LAYERS,
+    #                             n_heads=NUM_HEADS,
+    #                             ff_dim=FF_DIM,
+    #                             dropout_rate=0.1
+    #                             )
+    model = VisionTransformerOSv2(input_shape=INPUT_SHAPE,
+                                  patch_size=PATCH_SIZE,
+                                  patch_dim=PATCH_DIM,
+                                  n_encoder_layers=4,
+                                  n_decoder_layers=4,
+                                  n_heads=NUM_HEADS,
+                                  ff_dim=FF_DIM,
+                                  dropout_rate=0.1
+                                  )
 
     # LR = tf.keras.optimizers.schedules.ExponentialDecay(initial_learning_rate=LR,
     #                                                     decay_steps=int(0.66 * EPOCHS) * STEPS_PER_EPOCH,
@@ -126,7 +135,7 @@ model.summary()
 # print("Batch size of {} in memory: {}GB".format(batch_size, batch_mem_gb))
 
 # %%
-output_dir = "outputs/vitos_b2-98_drop01_b256_e200_p7_2"
+output_dir = "outputs/v2vitos_p7"
 os.makedirs(output_dir, exist_ok=True)
 hist = model.fit(train_dataset,
                  epochs=EPOCHS,

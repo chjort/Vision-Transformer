@@ -21,7 +21,9 @@ log_files = [
     # "outputs/vitos_b2-98_drop01_b1024_e200_seed41/log.csv",
     # "outputs/vitos_b2-98_drop01_b1024_e200_1/log.csv",
     "outputs/vitos_b2-98_drop01_b256_e200_p7/log.csv",
-    "outputs/vitos_b2-98_drop01_b256_e200_p7_1/log.csv"
+    "outputs/vitos_b2-98_drop01_b256_e200_p7_1/log.csv",
+    "outputs/vitos_b2-98_drop01_b256_e200_p7_2/log.csv",
+    "outputs/v2vitos_p4/log.csv"  # is underfitting
 ]
 metrics = ["loss", "accuracy"]
 fig, axes = plt.subplots(len(metrics), 2)
@@ -38,7 +40,6 @@ for i, metric in enumerate(metrics):
         if i == 0:
             axes[i][0].set_title("Train")
             axes[i][1].set_title("Val")
-
 plt.show()
 
 # %% PLOT SCHEDULES
