@@ -32,8 +32,8 @@ def flatten_batch(x, y):
 def preprocess(x, y):
     x1, x2 = x[0], x[1]
 
-    x1 = x1[..., 0:1]
-    x2 = x2[..., 0:1]
+    # x1 = x1[..., 0:1]
+    # x2 = x2[..., 0:1]
 
     return (x1, x2), y
 

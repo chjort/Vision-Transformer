@@ -27,7 +27,8 @@ def write_dataset_to_tfrecord(path, dataset, label_names):
         previous_label = current_label
 
 
-def cast_uint8(x):
+def preprocess(x):
+    x = x[..., 0:1]
     return tf.cast(x, tf.uint8)
 
 
@@ -61,7 +62,7 @@ train_dataset = SequentialImageDataset(class_dirs=train_class_dirs,
                                        repeats=None,
                                        seed=42)
 train_dataset.map_image(resize, INPUT_SHAPE[0], INPUT_SHAPE[1])
-train_dataset.map_image(cast_uint8)
+train_dataset.map_image(preprocess)
 
 test_dataset = SequentialImageDataset(class_dirs=test_class_dirs,
                                       labels=test_labels,
@@ -70,7 +71,7 @@ test_dataset = SequentialImageDataset(class_dirs=test_class_dirs,
                                       repeats=None,
                                       seed=42)
 test_dataset.map_image(resize, INPUT_SHAPE[0], INPUT_SHAPE[1])
-test_dataset.map_image(cast_uint8)
+test_dataset.map_image(preprocess)
 
 train_dataset = train_dataset.dataset
 test_dataset = test_dataset.dataset

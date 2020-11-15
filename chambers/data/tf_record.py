@@ -5,6 +5,7 @@ _SERIALIZE_IMAGE_TENSOR_DESCRIPTION = {
     "y": tf.io.FixedLenFeature([], tf.int64),
     "height": tf.io.FixedLenFeature([], tf.int64),
     "width": tf.io.FixedLenFeature([], tf.int64),
+    "channels": tf.io.FixedLenFeature([], tf.int64)
 }
 
 
@@ -31,6 +32,7 @@ def serialize_tensor_example(x, y):
         "y": _int_feature(y),
         "height": _int_feature(tf.shape(x)[0]),
         "width": _int_feature(tf.shape(x)[1]),
+        "channels": _int_feature(tf.shape(x)[2])
     }
     sample_proto = tf.train.Example(features=tf.train.Features(feature=feature))
     return sample_proto.SerializeToString()
@@ -45,7 +47,7 @@ def batch_deserialize_tensor_example(x, dtype=tf.float32):
         return tf.io.parse_tensor(x, out_type=dtype)
 
     x = tf.map_fn(_parse_tensor_dtype, tensor_example["x"],
-                  fn_output_signature=tf.TensorSpec(shape=[None, None, 3], dtype=tf.uint8),
+                  fn_output_signature=tf.TensorSpec(shape=[None, None, None], dtype=tf.uint8),
                   parallel_iterations=8,
                   infer_shape=False)
     y = tensor_example["y"]

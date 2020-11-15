@@ -1,132 +1,87 @@
 import glob
 import os
 
+import matplotlib.pyplot as plt
 import tensorflow as tf
 import tensorflow_addons as tfa
 from einops import rearrange, repeat
 
-from chambers.data.loader import InterleaveTFRecordOneshotDataset, InterleaveImageDataset
+from chambers.data.loader import InterleaveTFRecordDataset
+from chambers.data.tf_record import batch_deserialize_tensor_example_uint8
 from chambers.models.transformer import VisionTransformerOS
+
+
+class Nshot_Kway(tf.keras.metrics.Metric):
+    def __init__(self, name="nshot_kway"):
+        super(Nshot_Kway, self).__init__(name=name)
+        self.n_episodes = self.add_weight(name="n_trials", initializer="zeros")
+        self.n_correct = self.add_weight(name="n_correct_trials", initializer="zeros")
+
+    def update_state(self, y_true, y_pred, **kwargs):
+        self.n_episodes.assign_add(1)
+
+        n_true = tf.reduce_sum(y_true)
+
+        is_correct = tf.reduce_all(tf.equal(
+            tf.sort(tf.math.top_k(tf.squeeze(y_true), n_true, sorted=False)[1]),
+            tf.sort(tf.math.top_k(tf.squeeze(y_pred), n_true, sorted=False)[1])
+        ))
+        # tf.reduce_any(tf.equal(
+        #     tf.math.top_k(tf.squeeze(y_true), n, sorted=True)[1],
+        #     tf.math.top_k(tf.squeeze(y_pred), 1, sorted=True)[1]
+        # ))
+
+        is_correct = tf.cast(is_correct, tf.float32)
+        self.n_correct.assign_add(is_correct)
+
+    def result(self):
+        return self.n_correct / self.n_episodes
+
+
+strategy = tf.distribute.MirroredStrategy()
+# strategy = tf.distribute.OneDeviceStrategy("/gpu:0")
 
 # %%
 k = 5
 q = 1
-n = 2
+n = 1
 
 
-def arrange_oneshot_kway(x, y):
+def arrange_nshot_kway(x, y):
     Q = x[:, :q]
     S = x[:, q:]
+
+    Qy = y[:, :q]
+    Sy = y[:, q:]
 
     Q = repeat(Q, "k q h w c -> (k kn q) h w c", kn=k * n)
     S = rearrange(S, "k n h w c -> (k n) h w c")
     S = repeat(S, "kn h w c -> (k kn) h w c", k=k)
 
-    return Q  # , S
+    Y = tf.reshape(tf.equal(Qy, tf.reshape(Sy, [-1])), [-1])
+    Y = tf.cast(Y, tf.int32)
+
+    return (Q, S), Y
 
 
-TEST_PATH = "/home/crr/datasets/omniglot/test"
-class_dirs = glob.glob(os.path.join(TEST_PATH, "*/"))
-labels = list(range(len(class_dirs)))
-td = InterleaveImageDataset(class_dirs=class_dirs,
-                            labels=labels,
-                            class_cycle_length=k,
-                            n_per_class=n + q,
-                            block_bound=True,
-                            sample_n_random=True,
-                            shuffle=True,
-                            seed=42
-                            )
-td.batch(n + q, drop_remainder=True)
-td.batch(k, drop_remainder=True)
-td.map(arrange_oneshot_kway)
-td.window(k * n)
-td.dataset
-
-# %%
-it = iter(td.dataset)
-Q, S = next(it)
-
-itq = iter(Q)
-its = iter(S)
-
-bq = next(itq)
-bs = next(its)
-
-bq.shape
-
-Q.shape
-S.shape
-
-# %%
-x, y = next(iter(td.dataset))
-x.shape
-y
-
-Q = x[:, :q]
-S = x[:, q:]
-
-Q = repeat(Q, "k q h w c -> (k kn q) h w c", kn=k * n)
-S = rearrange(S, "k n h w c -> (k n) h w c")
-S = repeat(S, "kn h w c -> (k kn) h w c", k=k)
-
-# Q = y[:, :q]
-# S = y[:, q:]
-#
-# Q = repeat(Q, "k q -> (k kn q)", kn=k*n)
-# S = rearrange(S, "k n -> (k n)")
-# S = repeat(S, "kn -> (k kn)", k=k)
-
-Q.shape
-S.shape
-
-
-# %%
-def flatten_batch(x, y):
-    x1 = rearrange(x[0], "b n h w c -> (b n) h w c")
-    x2 = rearrange(x[1], "b n h w c -> (b n) h w c")
-    y = tf.reshape(y, [-1])
-
-    return (x1, x2), y
-
-
-def preprocess(x, y):
-    x1, x2 = x[0], x[1]
-
-    x1 = x1[..., 0:1]
-    x2 = x2[..., 0:1]
-
-    return (x1, x2), y
-
-
-# strategy = tf.distribute.MirroredStrategy()
-strategy = tf.distribute.OneDeviceStrategy("/gpu:0")
-
-# data parameters
 TEST_PATH = "/home/crr/datasets/omniglot/test_records"
-
-# loading data
 test_records = glob.glob(os.path.join(TEST_PATH, "*.tfrecord"))
-
-N_PER_PAIR = 2  # increasing this value causes overfitting
-N_PAIRS_PER_DEVICE = 64
-N_PAIRS = N_PAIRS_PER_DEVICE * strategy.num_replicas_in_sync  # scale batch size with this.
-test_dataset = InterleaveTFRecordOneshotDataset(records=test_records,
-                                                n=N_PER_PAIR,
-                                                sample_n_random=False,
-                                                shuffle=False,
-                                                reshuffle_iteration=False,
-                                                repeats=None,
-                                                seed=42)
-test_dataset.map(preprocess)
-test_dataset.batch(N_PAIRS)
-test_dataset.map(flatten_batch)
-test_dataset.prefetch(-1)
-
-test_dataset = test_dataset.dataset
+td = InterleaveTFRecordDataset(records=test_records,
+                               record_cycle_length=k,
+                               n_per_record=n + q,
+                               block_bound=True,
+                               sample_n_random=True,
+                               shuffle=True,
+                               seed=42
+                               )
+td.batch(n + q, drop_remainder=True)
+td.map(batch_deserialize_tensor_example_uint8)
+td.batch(k, drop_remainder=True)
+td.map(arrange_nshot_kway)
+td.unbatch()
+td.batch(k * n)
 
 # %%
-
 INPUT_SHAPE = (84, 84, 1)
 PATCH_SIZE = 7
 PATCH_DIM = 128
@@ -153,7 +108,7 @@ with strategy.scope():
                                      amsgrad=False)
     model.compile(optimizer=optimizer,
                   loss=tf.keras.losses.BinaryCrossentropy(),
-                  metrics=[tf.keras.metrics.BinaryAccuracy(name="accuracy"), tf.keras.metrics.AUC()])
+                  metrics=[tf.keras.metrics.BinaryAccuracy(name="accuracy"), tf.keras.metrics.AUC(), Nshot_Kway()])
 
     # %%
     model.load_weights("outputs/vitos_b2-98_drop01_b256_e200_p7_2/weights_0.8121.h5")
@@ -161,4 +116,29 @@ with strategy.scope():
 model.summary()
 
 # %%
-model.evaluate(test_dataset)
+model.evaluate(td.dataset)
+
+# it = iter(td.dataset)
+# acc = Nshot_Kway()
+
+# %%
+# (Q, S), Y = next(it)
+# yhat = model([Q, S])
+# acc.update_state(Y, yhat)
+# acc.n_episodes
+# acc.n_correct
+#
+# # %%
+# fig, ax = plt.subplots(k * n, 2, figsize=(6, 13))
+#
+# for i in range(k * n):
+#     ax[i, 0].imshow(Q[i])
+#     ax[i, 1].imshow(S[i])
+#     ax[i, 0].axis("off")
+#     ax[i, 1].axis("off")
+#     ax[i, 0].annotate(str(Y.numpy()[i]), xy=(0, 0), xytext=(-20, 45))
+#     ax[i, 1].annotate(str(yhat.numpy()[i]), xy=(0, 0), xytext=(95, 45))
+#
+# plt.suptitle(acc.result().numpy())
+# plt.tight_layout()
+# plt.show()
