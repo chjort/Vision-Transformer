@@ -9,8 +9,10 @@ class LinearWarmup(tf.keras.optimizers.schedules.LearningRateSchedule):
         self.name = name
         self.warmup_rates = tf.linspace(0.0, schedule.initial_learning_rate, warmup_steps)
 
+    @tf.function
     def __call__(self, step):
         if step < self.warmup_steps - 1:
+            step = tf.cast(step, tf.int32)
             return self.warmup_rates[step]
         else:
             return self.schedule(step - self.warmup_steps + 1)

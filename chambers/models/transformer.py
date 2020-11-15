@@ -75,6 +75,10 @@ def VisionTransformerOS(input_shape, patch_size, patch_dim, n_encoder_layers, n_
     x1 = tf.keras.layers.Dense(patch_dim)(x1)
     x2 = tf.keras.layers.Dense(patch_dim)(x2)
 
+    # grid_size = (input_shape[0] // patch_size, input_shape[1] // patch_size)
+    # x1 = PatchEmbedding2D(grid_size=grid_size, embedding_dim=patch_dim)(x1)
+    # x2 = PatchEmbedding2D(grid_size=grid_size, embedding_dim=patch_dim)(x2)
+
     x = ConcatEmbedding(n_embeddings=1,
                         embedding_dim=patch_dim,
                         side="left",
@@ -89,9 +93,11 @@ def VisionTransformerOS(input_shape, patch_size, patch_dim, n_encoder_layers, n_
                         name="add_sep_token")(x)
     x = tf.keras.layers.Concatenate(axis=1)([x, x2])
 
-    x = LearnedEmbedding1D(x.shape[1], patch_dim,
+    x = LearnedEmbedding1D(patch_dim,
                            initializer=tf.keras.initializers.RandomNormal(),
                            name="pos_embedding")(x)
+    # x = PositionalEmbedding1D(patch_dim,
+    #                           name="pos_embedding")(x)
     x = Encoder(embed_dim=patch_dim,
                 num_heads=n_heads,
                 ff_dim=ff_dim,

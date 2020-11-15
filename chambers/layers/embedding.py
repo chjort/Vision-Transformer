@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+from einops import rearrange
 
 
 class PositionalEmbedding1D(tf.keras.layers.Layer):
@@ -137,15 +138,35 @@ class PositionalEmbedding2D(tf.keras.layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-tf.keras.utils.get_custom_objects().update({
-    "PositionalEmbedding1D": PositionalEmbedding1D,
-    "PositionalEmbedding2D": PositionalEmbedding2D
-})
+class PatchEmbedding2D(PositionalEmbedding2D):
+    def __init__(self, grid_size, embedding_dim, temperature=10000, normalize=False,
+                 scale=None, eps=1e-6, add_to_input=True, **kwargs):
+        super(PatchEmbedding2D, self).__init__(embedding_dim, temperature, normalize, scale, eps, add_to_input,
+                                               **kwargs)
+
+        if isinstance(grid_size, int):
+            self.grid_size = (grid_size, grid_size)
+        else:
+            self.grid_size = grid_size
+
+    def call(self, inputs, mask=None, **kwargs):
+        inp = tf.zeros([1, self.grid_size[0], self.grid_size[1], self.embedding_dim])
+        x = super().call(inp, mask=None, **kwargs)
+        x = rearrange(x, "b h w c -> b (h w) c")
+
+        if self.add_to_input:
+            x = inputs + x
+
+        return x
+
+    def get_config(self):
+        config = {'grid_size': self.grid_size}
+        base_config = super(PatchEmbedding2D, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
 
 
 class LearnedEmbedding1D(tf.keras.layers.Layer):
-    def __init__(self, n_embeddings, embedding_dim, initializer=None, dtype=None, name="learned_embedding"):
-        self.n_embeddings = n_embeddings
+    def __init__(self, embedding_dim, initializer=None, dtype=None, name="learned_embedding"):
         self.embedding_dim = embedding_dim
         self.initializer = initializer
         self.supports_masking = True
@@ -153,7 +174,7 @@ class LearnedEmbedding1D(tf.keras.layers.Layer):
 
     def build(self, input_shape):
         self.embedding = self.add_weight("embeddings",
-                                         shape=[self.n_embeddings, self.embedding_dim],
+                                         shape=[input_shape[1], self.embedding_dim],
                                          initializer=self.initializer,
                                          dtype=self.dtype)
 
@@ -161,7 +182,7 @@ class LearnedEmbedding1D(tf.keras.layers.Layer):
         return inputs + self.embedding
 
     def get_config(self):
-        config = {'n_embeddings': self.n_embeddings, "embedding_dim": self.embedding_dim,
+        config = {"embedding_dim": self.embedding_dim,
                   "initializer": self.initializer}
         base_config = super(LearnedEmbedding1D, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -207,5 +228,7 @@ class ConcatEmbedding(tf.keras.layers.Layer):
 
 
 tf.keras.utils.get_custom_objects().update({
+    "PositionalEmbedding1D": PositionalEmbedding1D,
+    "PositionalEmbedding2D": PositionalEmbedding2D,
     "ConcatEmbedding": ConcatEmbedding
 })

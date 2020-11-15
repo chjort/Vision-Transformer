@@ -108,7 +108,11 @@ with strategy.scope():
                                      amsgrad=False)
     model.compile(optimizer=optimizer,
                   loss=tf.keras.losses.BinaryCrossentropy(),
-                  metrics=[tf.keras.metrics.BinaryAccuracy(name="accuracy"), tf.keras.metrics.AUC(), Nshot_Kway()])
+                  metrics=[tf.keras.metrics.BinaryAccuracy(name="accuracy"),
+                           tf.keras.metrics.Precision()
+                           # Nshot_Kway(),
+                           # tf.keras.metrics.TopKCategoricalAccuracy()
+                           ])
 
     # %%
     model.load_weights("outputs/vitos_b2-98_drop01_b256_e200_p7_2/weights_0.8121.h5")

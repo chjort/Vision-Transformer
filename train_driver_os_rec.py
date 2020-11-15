@@ -18,22 +18,14 @@ import tensorflow_addons as tfa
 from einops import rearrange
 
 from chambers.data.loader import InterleaveTFRecordOneshotDataset
-from chambers.models.transformer import VisionTransformerOS, VisionTransformerOSv2
+from chambers.models.transformer import VisionTransformerOS
+from chambers.schedules import LinearWarmup
 
 
 def flatten_batch(x, y):
     x1 = rearrange(x[0], "b n h w c -> (b n) h w c")
     x2 = rearrange(x[1], "b n h w c -> (b n) h w c")
     y = tf.reshape(y, [-1])
-
-    return (x1, x2), y
-
-
-def preprocess(x, y):
-    x1, x2 = x[0], x[1]
-
-    # x1 = x1[..., 0:1]
-    # x2 = x2[..., 0:1]
 
     return (x1, x2), y
 
@@ -59,7 +51,6 @@ train_dataset = InterleaveTFRecordOneshotDataset(records=train_records,
                                                  reshuffle_iteration=True,
                                                  repeats=-1,
                                                  seed=42)
-train_dataset.map(preprocess)
 train_dataset.batch(N_PAIRS)
 train_dataset.map(flatten_batch)
 train_dataset.prefetch(-1)
@@ -71,7 +62,6 @@ test_dataset = InterleaveTFRecordOneshotDataset(records=test_records,
                                                 reshuffle_iteration=False,
                                                 repeats=None,
                                                 seed=42)
-test_dataset.map(preprocess)
 test_dataset.batch(N_PAIRS)
 test_dataset.map(flatten_batch)
 test_dataset.prefetch(-1)
@@ -83,8 +73,9 @@ test_dataset = test_dataset.dataset
 EPOCHS = 200
 STEPS_PER_EPOCH = 200 // strategy.num_replicas_in_sync
 LR = 0.00006
-# WARMUP_STEPS = int(0.1 * EPOCHS)
-# EPOCHS = EPOCHS + WARMUP_STEPS
+# WARMUP_EPOCHS = int(0.1 * EPOCHS)
+# WARMUP_STEPS = WARMUP_EPOCHS * STEPS_PER_EPOCH
+# EPOCHS = EPOCHS + WARMUP_EPOCHS
 
 INPUT_SHAPE = (84, 84, 1)
 PATCH_SIZE = 7
@@ -94,23 +85,23 @@ NUM_HEADS = 8
 FF_DIM = 512
 
 with strategy.scope():
-    # model = VisionTransformerOS(input_shape=INPUT_SHAPE,
-    #                             patch_size=PATCH_SIZE,
-    #                             patch_dim=PATCH_DIM,
-    #                             n_encoder_layers=N_ENCODER_LAYERS,
-    #                             n_heads=NUM_HEADS,
-    #                             ff_dim=FF_DIM,
-    #                             dropout_rate=0.1
-    #                             )
-    model = VisionTransformerOSv2(input_shape=INPUT_SHAPE,
-                                  patch_size=PATCH_SIZE,
-                                  patch_dim=PATCH_DIM,
-                                  n_encoder_layers=4,
-                                  n_decoder_layers=4,
-                                  n_heads=NUM_HEADS,
-                                  ff_dim=FF_DIM,
-                                  dropout_rate=0.1
-                                  )
+    model = VisionTransformerOS(input_shape=INPUT_SHAPE,
+                                patch_size=PATCH_SIZE,
+                                patch_dim=PATCH_DIM,
+                                n_encoder_layers=N_ENCODER_LAYERS,
+                                n_heads=NUM_HEADS,
+                                ff_dim=FF_DIM,
+                                dropout_rate=0.1
+                                )
+    # model = VisionTransformerOSv2(input_shape=INPUT_SHAPE,
+    #                               patch_size=PATCH_SIZE,
+    #                               patch_dim=PATCH_DIM,
+    #                               n_encoder_layers=4,
+    #                               n_decoder_layers=4,
+    #                               n_heads=NUM_HEADS,
+    #                               ff_dim=FF_DIM,
+    #                               dropout_rate=0.1
+    #                               )
 
     # LR = tf.keras.optimizers.schedules.ExponentialDecay(initial_learning_rate=LR,
     #                                                     decay_steps=int(0.66 * EPOCHS) * STEPS_PER_EPOCH,
@@ -126,7 +117,9 @@ with strategy.scope():
                                      amsgrad=False)
     model.compile(optimizer=optimizer,
                   loss=tf.keras.losses.BinaryCrossentropy(),
-                  metrics=[tf.keras.metrics.BinaryAccuracy(name="accuracy"), tf.keras.metrics.AUC()])
+                  metrics=[tf.keras.metrics.BinaryAccuracy(name="accuracy"),
+                           tf.keras.metrics.Precision(),
+                           tf.keras.metrics.Recall()])
 
 model.summary()
 
@@ -135,7 +128,7 @@ model.summary()
 # print("Batch size of {} in memory: {}GB".format(batch_size, batch_mem_gb))
 
 # %%
-output_dir = "outputs/v2vitos_p7"
+output_dir = "outputs/vitos_sched"
 os.makedirs(output_dir, exist_ok=True)
 hist = model.fit(train_dataset,
                  epochs=EPOCHS,

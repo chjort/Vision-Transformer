@@ -23,7 +23,10 @@ log_files = [
     "outputs/vitos_b2-98_drop01_b256_e200_p7/log.csv",
     "outputs/vitos_b2-98_drop01_b256_e200_p7_1/log.csv",
     "outputs/vitos_b2-98_drop01_b256_e200_p7_2/log.csv",
-    "outputs/v2vitos_p4/log.csv"  # is underfitting
+    "outputs/vitos_sched/log.csv",
+    # "outputs/vitos_sin/log.csv",
+    # "outputs/vitos_sin2d/log.csv",
+    # "outputs/v2vitos_p4/log.csv"  # is underfitting
 ]
 metrics = ["loss", "accuracy"]
 fig, axes = plt.subplots(len(metrics), 2)
