@@ -18,7 +18,8 @@ import tensorflow_addons as tfa
 from einops import rearrange
 
 from chambers.data.loader import InterleaveTFRecordOneshotDataset
-from chambers.models.transformer import VisionTransformerOS, VisionTransformerOSv2
+from chambers.models.transformer import VisionTransformerOSv2
+from chambers.schedules import LinearWarmup
 
 
 def flatten_batch(x, y):
@@ -72,17 +73,20 @@ test_dataset = test_dataset.dataset
 EPOCHS = 200
 STEPS_PER_EPOCH = 200 // strategy.num_replicas_in_sync
 LR = 0.00006
-# WARMUP_EPOCHS = int(0.1 * EPOCHS)
-# WARMUP_STEPS = WARMUP_EPOCHS * STEPS_PER_EPOCH
-# EPOCHS = EPOCHS + WARMUP_EPOCHS
+WARMUP_EPOCHS = int(0.1 * EPOCHS)
+WARMUP_STEPS = WARMUP_EPOCHS * STEPS_PER_EPOCH
+EPOCHS = EPOCHS + WARMUP_EPOCHS
 
 # INPUT_SHAPE = (84, 84, 1)
 INPUT_SHAPE = (None, None, 1)
 PATCH_SIZE = 7
 PATCH_DIM = 128
-N_ENCODER_LAYERS = 8
+# N_ENCODER_LAYERS = 8
+N_ENCODER_LAYERS = 4
+N_DECODER_LAYERS = 4
 NUM_HEADS = 8
 FF_DIM = 512
+DROPOUT_RATE = 0.1
 
 with strategy.scope():
     # model = VisionTransformerOS(input_shape=INPUT_SHAPE,
@@ -91,23 +95,23 @@ with strategy.scope():
     #                             n_encoder_layers=N_ENCODER_LAYERS,
     #                             n_heads=NUM_HEADS,
     #                             ff_dim=FF_DIM,
-    #                             dropout_rate=0.1
+    #                             dropout_rate=DROPOUT_RATE
     #                             )
     model = VisionTransformerOSv2(input_shape=INPUT_SHAPE,
                                   patch_size=PATCH_SIZE,
                                   patch_dim=PATCH_DIM,
-                                  n_encoder_layers=4,
-                                  n_decoder_layers=4,
+                                  n_encoder_layers=N_ENCODER_LAYERS,
+                                  n_decoder_layers=N_DECODER_LAYERS,
                                   n_heads=NUM_HEADS,
                                   ff_dim=FF_DIM,
-                                  dropout_rate=0.1
+                                  dropout_rate=DROPOUT_RATE
                                   )
 
-    # LR = tf.keras.optimizers.schedules.ExponentialDecay(initial_learning_rate=LR,
-    #                                                     decay_steps=int(0.66 * EPOCHS) * STEPS_PER_EPOCH,
-    #                                                     decay_rate=0.1,
-    #                                                     staircase=True)
-    # LR = LinearWarmup(LR, warmup_steps=WARMUP_STEPS)
+    LR = tf.keras.optimizers.schedules.ExponentialDecay(initial_learning_rate=LR,
+                                                        decay_steps=int(0.66 * EPOCHS) * STEPS_PER_EPOCH,
+                                                        decay_rate=0.1,
+                                                        staircase=True)
+    LR = LinearWarmup(LR, warmup_steps=WARMUP_STEPS)
 
     optimizer = tfa.optimizers.AdamW(learning_rate=LR,
                                      weight_decay=1e-4,
@@ -134,24 +138,25 @@ model.summary()
 # z.shape
 
 # %%
-output_dir = "outputs/vitosv2"
-# os.makedirs(output_dir, exist_ok=True)
+BATCH_SIZE = 2 * N_PER_PAIR * N_PAIRS_PER_DEVICE
+output_dir = "outputs/vitos2_p{}_e{}_bz{}_sch".format(PATCH_SIZE, EPOCHS, BATCH_SIZE)
+os.makedirs(output_dir, exist_ok=True)
 hist = model.fit(train_dataset,
                  epochs=EPOCHS,
                  steps_per_epoch=STEPS_PER_EPOCH,
                  validation_data=test_dataset,
                  callbacks=[
-                     # tf.keras.callbacks.CSVLogger(os.path.join(output_dir, "log.csv")),
-                     # tf.keras.callbacks.TensorBoard(os.path.join(output_dir, "tb_logs"),
-                     #                                profile_batch=0),
-                     # tf.keras.callbacks.ModelCheckpoint(os.path.join(output_dir, "weights_{val_accuracy:.4f}.h5"),
-                     #                                    monitor="val_accuracy",
-                     #                                    save_best_only=True,
-                     #                                    save_weights_only=True)
+                     tf.keras.callbacks.CSVLogger(os.path.join(output_dir, "log.csv")),
+                     tf.keras.callbacks.TensorBoard(os.path.join(output_dir, "tb_logs"),
+                                                    profile_batch=0),
+                     tf.keras.callbacks.ModelCheckpoint(os.path.join(output_dir, "weights_{val_accuracy:.4f}.h5"),
+                                                        monitor="val_accuracy",
+                                                        save_best_only=True,
+                                                        save_weights_only=True)
                  ]
                  )
 
-# model.save(os.path.join(output_dir, "model.h5"))
-# model.save_weights(os.path.join(output_dir, "model.weights"))
-# model.save_weights(os.path.join(output_dir, "model_weights.h5"))
-# model.save(os.path.join(output_dir, "model"))
+model.save_weights(os.path.join(output_dir, "model.weights"))
+model.save_weights(os.path.join(output_dir, "model_weights.h5"))
+model.save(os.path.join(output_dir, "model.h5"))
+model.save(os.path.join(output_dir, "model"))

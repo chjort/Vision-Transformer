@@ -24,6 +24,8 @@ log_files = [
     "outputs/vitos_b2-98_drop01_b256_e200_p7_1/log.csv",
     "outputs/vitos_b2-98_drop01_b256_e200_p7_2/log.csv",
     "outputs/vitos_sched/log.csv",
+    "outputs/vitos21_p7_e200_bz256/log.csv",
+    "outputs/vitos2_p7_e220_bz256_sch/log.csv",
     # "outputs/vitos_sin/log.csv",
     # "outputs/vitos_sin2d/log.csv",
     # "outputs/v2vitos_p4/log.csv"  # is underfitting
@@ -48,6 +50,7 @@ plt.show()
 # %% PLOT SCHEDULES
 import tensorflow as tf
 import matplotlib.pyplot as plt
+from chambers.schedules import LinearWarmup
 
 EPOCHS = 100
 LR = 0.00006
@@ -82,11 +85,15 @@ schedules = [
                                                   end_learning_rate=0.000006,
                                                   cycle=True,
                                                   name="poly_cycle"),
+    LR
 ]
 for i in range(len(schedules)):
-    sch = schedules[i]
-    lr_vals = [sch(e) for e in range(EPOCHS)]
-    plt.plot(lr_vals, label=sch.name)
+    sch = LinearWarmup(schedules[i], warmup_steps=10)
+    lr_vals = [sch(tf.constant(e)) for e in range(EPOCHS)]
+    if sch.lr_is_schedule:
+        plt.plot(lr_vals, label=sch.learning_rate.name)
+    else:
+        plt.plot(lr_vals, label=sch.learning_rate)
 
 plt.legend()
 plt.show()

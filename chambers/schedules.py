@@ -2,12 +2,18 @@ import tensorflow as tf
 
 
 class LinearWarmup(tf.keras.optimizers.schedules.LearningRateSchedule):
-    def __init__(self, schedule, warmup_steps, name=None):
+    def __init__(self, learning_rate, warmup_steps, name=None):
         super().__init__()
-        self.schedule = schedule
+        self.learning_rate = learning_rate
         self.warmup_steps = warmup_steps
         self.name = name
-        self.warmup_rates = tf.linspace(0.0, schedule.initial_learning_rate, warmup_steps)
+
+        if isinstance(learning_rate, tf.keras.optimizers.schedules.LearningRateSchedule):
+            self.lr_is_schedule = True
+            self.warmup_rates = tf.linspace(0.0, learning_rate.initial_learning_rate, warmup_steps)
+        else:
+            self.lr_is_schedule = False
+            self.warmup_rates = tf.linspace(0.0, learning_rate, warmup_steps)
 
     @tf.function
     def __call__(self, step):
@@ -15,11 +21,19 @@ class LinearWarmup(tf.keras.optimizers.schedules.LearningRateSchedule):
             step = tf.cast(step, tf.int32)
             return self.warmup_rates[step]
         else:
-            return self.schedule(step - self.warmup_steps + 1)
+            if self.lr_is_schedule:
+                return self.learning_rate(step - self.warmup_steps + 1)
+            else:
+                return self.learning_rate
 
     def get_config(self):
         return {
-            "schedule": self.schedule,
+            "learning_rate": self.learning_rate,
             "warmup_steps": self.warmup_steps,
             "name": self.name
         }
+
+
+tf.keras.utils.get_custom_objects().update({
+    "LinearWarmup": LinearWarmup,
+})

@@ -7,7 +7,7 @@ class PositionalEmbedding1D(tf.keras.layers.Layer):
     def __init__(self, embedding_dim, temperature=10000, add_to_input=True, **kwargs):
         super(PositionalEmbedding1D, self).__init__(**kwargs)
         self.embedding_dim = embedding_dim
-        self.temperature = tf.cast(temperature, tf.float32)
+        self.temperature = temperature
         self.add_to_input = add_to_input
         self.supports_masking = True
 
@@ -36,7 +36,7 @@ class PositionalEmbedding1D(tf.keras.layers.Layer):
         i = tf.cast(i, tf.float32)
         d_model = tf.cast(d_model, tf.float32)
 
-        angle_rates = 1. / tf.pow(self.temperature, (2. * (i // 2.)) / d_model)
+        angle_rates = 1. / tf.pow(tf.cast(self.temperature, tf.float32), (2. * (i // 2.)) / d_model)
         return pos * angle_rates
 
     def positional_encoding(self, position, d_model):
@@ -230,5 +230,7 @@ class ConcatEmbedding(tf.keras.layers.Layer):
 tf.keras.utils.get_custom_objects().update({
     "PositionalEmbedding1D": PositionalEmbedding1D,
     "PositionalEmbedding2D": PositionalEmbedding2D,
+    "PatchEmbedding2D": PatchEmbedding2D,
+    "LearnedEmbedding1D": LearnedEmbedding1D,
     "ConcatEmbedding": ConcatEmbedding
 })
