@@ -128,30 +128,30 @@ model.summary()
 # print("Batch size of {} in memory: {}GB".format(batch_size, batch_mem_gb))
 
 # %%
-output_dir = "outputs/vitos_sched"
-os.makedirs(output_dir, exist_ok=True)
+# x1 = tf.random.uniform([1, 70, 70, 1])
+# x2 = tf.random.uniform([5, 84, 84, 1])
+# z = model([x1, x2])
+# z.shape
+
+# %%
+output_dir = "outputs/vitosv2"
+# os.makedirs(output_dir, exist_ok=True)
 hist = model.fit(train_dataset,
                  epochs=EPOCHS,
                  steps_per_epoch=STEPS_PER_EPOCH,
                  validation_data=test_dataset,
                  callbacks=[
-                     tf.keras.callbacks.CSVLogger(os.path.join(output_dir, "log.csv")),
-                     tf.keras.callbacks.TensorBoard(os.path.join(output_dir, "tb_logs"),
-                                                    profile_batch=0),
-                     tf.keras.callbacks.ModelCheckpoint(os.path.join(output_dir, "weights_{val_accuracy:.4f}.h5"),
-                                                        monitor="val_accuracy",
-                                                        save_best_only=True,
-                                                        save_weights_only=True)
+                     # tf.keras.callbacks.CSVLogger(os.path.join(output_dir, "log.csv")),
+                     # tf.keras.callbacks.TensorBoard(os.path.join(output_dir, "tb_logs"),
+                     #                                profile_batch=0),
+                     # tf.keras.callbacks.ModelCheckpoint(os.path.join(output_dir, "weights_{val_accuracy:.4f}.h5"),
+                     #                                    monitor="val_accuracy",
+                     #                                    save_best_only=True,
+                     #                                    save_weights_only=True)
                  ]
                  )
 
-model.save(os.path.join(output_dir, "model.h5"))
-model.save_weights(os.path.join(output_dir, "model.weights"))
-model.save_weights(os.path.join(output_dir, "model_weights.h5"))
-model.save(os.path.join(output_dir, "model"))
-
-#%%
-x1 = tf.random.uniform([1, 70, 70, 1])
-x2 = tf.random.uniform([5, 84, 84, 1])
-z = model([x1, x2])
-z.shape
+# model.save(os.path.join(output_dir, "model.h5"))
+# model.save_weights(os.path.join(output_dir, "model.weights"))
+# model.save_weights(os.path.join(output_dir, "model_weights.h5"))
+# model.save(os.path.join(output_dir, "model"))
