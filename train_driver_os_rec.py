@@ -18,8 +18,7 @@ import tensorflow_addons as tfa
 from einops import rearrange
 
 from chambers.data.loader import InterleaveTFRecordOneshotDataset
-from chambers.models.transformer import VisionTransformerOS
-from chambers.schedules import LinearWarmup
+from chambers.models.transformer import VisionTransformerOS, VisionTransformerOSv2
 
 
 def flatten_batch(x, y):
@@ -77,7 +76,8 @@ LR = 0.00006
 # WARMUP_STEPS = WARMUP_EPOCHS * STEPS_PER_EPOCH
 # EPOCHS = EPOCHS + WARMUP_EPOCHS
 
-INPUT_SHAPE = (84, 84, 1)
+# INPUT_SHAPE = (84, 84, 1)
+INPUT_SHAPE = (None, None, 1)
 PATCH_SIZE = 7
 PATCH_DIM = 128
 N_ENCODER_LAYERS = 8
@@ -85,23 +85,23 @@ NUM_HEADS = 8
 FF_DIM = 512
 
 with strategy.scope():
-    model = VisionTransformerOS(input_shape=INPUT_SHAPE,
-                                patch_size=PATCH_SIZE,
-                                patch_dim=PATCH_DIM,
-                                n_encoder_layers=N_ENCODER_LAYERS,
-                                n_heads=NUM_HEADS,
-                                ff_dim=FF_DIM,
-                                dropout_rate=0.1
-                                )
-    # model = VisionTransformerOSv2(input_shape=INPUT_SHAPE,
-    #                               patch_size=PATCH_SIZE,
-    #                               patch_dim=PATCH_DIM,
-    #                               n_encoder_layers=4,
-    #                               n_decoder_layers=4,
-    #                               n_heads=NUM_HEADS,
-    #                               ff_dim=FF_DIM,
-    #                               dropout_rate=0.1
-    #                               )
+    # model = VisionTransformerOS(input_shape=INPUT_SHAPE,
+    #                             patch_size=PATCH_SIZE,
+    #                             patch_dim=PATCH_DIM,
+    #                             n_encoder_layers=N_ENCODER_LAYERS,
+    #                             n_heads=NUM_HEADS,
+    #                             ff_dim=FF_DIM,
+    #                             dropout_rate=0.1
+    #                             )
+    model = VisionTransformerOSv2(input_shape=INPUT_SHAPE,
+                                  patch_size=PATCH_SIZE,
+                                  patch_dim=PATCH_DIM,
+                                  n_encoder_layers=4,
+                                  n_decoder_layers=4,
+                                  n_heads=NUM_HEADS,
+                                  ff_dim=FF_DIM,
+                                  dropout_rate=0.1
+                                  )
 
     # LR = tf.keras.optimizers.schedules.ExponentialDecay(initial_learning_rate=LR,
     #                                                     decay_steps=int(0.66 * EPOCHS) * STEPS_PER_EPOCH,
@@ -149,3 +149,9 @@ model.save(os.path.join(output_dir, "model.h5"))
 model.save_weights(os.path.join(output_dir, "model.weights"))
 model.save_weights(os.path.join(output_dir, "model_weights.h5"))
 model.save(os.path.join(output_dir, "model"))
+
+#%%
+x1 = tf.random.uniform([1, 70, 70, 1])
+x2 = tf.random.uniform([5, 84, 84, 1])
+z = model([x1, x2])
+z.shape
