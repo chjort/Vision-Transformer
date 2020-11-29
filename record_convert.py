@@ -3,7 +3,7 @@ import os
 
 import tensorflow as tf
 
-from chambers.augmentations import resize
+from chambers.augmentations.augmentations import resize
 from chambers.data.loader import SequentialImageDataset
 from chambers.data.tf_record import serialize_tensor_example
 
